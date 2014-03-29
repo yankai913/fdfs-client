@@ -1,11 +1,11 @@
 package com.zoo.fdfs.api;
 
 import java.util.Date;
-import static com.zoo.fdfs.api.Contants.FDFS_PROTO_PKG_LEN_SIZE;
-import static com.zoo.fdfs.api.Contants.FDFS_STORAGE_ID_MAX_SIZE;
-import static com.zoo.fdfs.api.Contants.FDFS_IPADDR_SIZE;
-import static com.zoo.fdfs.api.Contants.FDFS_VERSION_SIZE;
-import static com.zoo.fdfs.api.Contants.FDFS_DOMAIN_NAME_MAX_SIZE;
+import static com.zoo.fdfs.api.Constants.FDFS_PROTO_PKG_LEN_SIZE;
+import static com.zoo.fdfs.api.Constants.FDFS_STORAGE_ID_MAX_SIZE;
+import static com.zoo.fdfs.api.Constants.FDFS_IPADDR_SIZE;
+import static com.zoo.fdfs.api.Constants.FDFS_VERSION_SIZE;
+import static com.zoo.fdfs.api.Constants.FDFS_DOMAIN_NAME_MAX_SIZE;
 
 
 /**

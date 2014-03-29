@@ -10,17 +10,17 @@ import java.net.InetSocketAddress;
  */
 public class StorageConfig {
 
-    private int storePathIndex;
+    private byte storePathIndex;
 
     private InetSocketAddress inetSocketAddress;
 
 
-    public int getStorePathIndex() {
+    public byte getStorePathIndex() {
         return storePathIndex;
     }
 
 
-    public void setStorePathIndex(int storePathIndex) {
+    public void setStorePathIndex(byte storePathIndex) {
         this.storePathIndex = storePathIndex;
     }
 

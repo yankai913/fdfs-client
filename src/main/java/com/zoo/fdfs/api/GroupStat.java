@@ -1,7 +1,7 @@
 package com.zoo.fdfs.api;
 
-import static com.zoo.fdfs.api.Contants.FDFS_GROUP_NAME_MAX_LEN;
-import static com.zoo.fdfs.api.Contants.FDFS_PROTO_PKG_LEN_SIZE;
+import static com.zoo.fdfs.api.Constants.FDFS_GROUP_NAME_MAX_LEN;
+import static com.zoo.fdfs.api.Constants.FDFS_PROTO_PKG_LEN_SIZE;
 
 
 /**

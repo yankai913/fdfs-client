@@ -36,7 +36,8 @@ public class Bytes {
         t = t + ((b[off + 0] & 0xFF) << 56);
         return t;
     }
-    
+
+
     public static int bytes2int(byte[] b, int off) {
         int t = 0;
         t = t + ((b[off + 3] & 0xFF) << 0);
@@ -45,5 +46,23 @@ public class Bytes {
         t = t + ((b[off + 0] & 0xFF) << 24);
         return t;
     }
-    
+
+
+    public static void truncToFill(byte[] src, int length, byte[] dest, int offset) {
+        for (int i = 0; i < length; i++) {
+            dest[i + offset] = src[i];
+        }
+    }
+
+
+    public static void append(byte[] src, byte[] dest, int offset) {
+        for (int i = 0; i < src.length; i++) {
+            dest[i + offset] = src[i];
+        }
+    }
+
+
+    public static void append(byte b, byte[] dest, int offset) {
+        dest[offset] = b;
+    }
 }

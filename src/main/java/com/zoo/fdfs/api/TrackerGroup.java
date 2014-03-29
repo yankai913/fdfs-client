@@ -55,8 +55,8 @@ public class TrackerGroup {
                 socket = createSocket(addr);
             }
             catch (Exception e) {
-                logger.error("address:{} create socket failed!", addr);
                 logger.error(e.getMessage(), e);
+                throw new IllegalStateException("address:{" + addr + "} create socket failed!");
             }
             finally {
                 if (socket != null && socket.isConnected()) {
@@ -69,7 +69,6 @@ public class TrackerGroup {
                 }
             }
         }
-        throw new IllegalStateException("no available socket");
     }
 
 
@@ -85,15 +84,15 @@ public class TrackerGroup {
     }
 
 
-    public Socket getAvailableSocket() {
+    private Set<Socket> getGroupSocket() {
+        Set<Socket> set = new HashSet<Socket>();
         Iterator<String> availableIterator = availableTrackerServerAddrSet.iterator();
-        Socket socket = null;
         while (availableIterator.hasNext()) {
             String addr = availableIterator.next();
             try {
-                socket = createSocket(addr);
+                Socket socket = createSocket(addr);
                 if (socket.isConnected()) {
-                    return socket;
+                    set.add(socket);
                 }
             }
             catch (Exception e) {
@@ -103,18 +102,15 @@ public class TrackerGroup {
                 unavailableTrackerServerAddrSet.add(addr);
             }
         }
-        if (socket == null || !socket.isConnected()) {
-            logger.error("availableTrackerServerAddrSet has no available tracker server socket");
-        }
         Iterator<String> unavailableIterator = unavailableTrackerServerAddrSet.iterator();
         while (unavailableIterator.hasNext()) {
             String addr = unavailableIterator.next();
             try {
-                socket = createSocket(addr);
+                Socket socket = createSocket(addr);
                 if (socket.isConnected()) {
                     unavailableIterator.remove();
                     availableTrackerServerAddrSet.add(addr);
-                    return socket;
+                    set.add(socket);
                 }
             }
             catch (Exception e) {
@@ -122,13 +118,10 @@ public class TrackerGroup {
                 logger.error(e.getMessage(), e);
             }
         }
-        if (socket == null || !socket.isConnected()) {
-            logger.error("unavailableTrackerServerAddrSet has no available tracker server socket");
-        }
         if (availableTrackerServerAddrSet.isEmpty()) {
             logger.error("availableTrackerServerAddrSet is empty");
         }
-        return null;
+        return set;
     }
 
 
@@ -137,23 +130,15 @@ public class TrackerGroup {
     }
 
 
-    public Set<Socket> getGroupSocket() {
-        Set<Socket> set = new HashSet<Socket>();
-        for (String addr : availableTrackerServerAddrSet) {
-            try {
-                set.add(createSocket(addr));
-            }
-            catch (Exception e) {
-                logger.error("getGroupSocket,addr:{} create socket fail,");
-            }
+    public Socket getAvailableSocket() {
+        Set<Socket> socketSet = getGroupSocket();
+        if (socketSet.size() > 0) {
+            Iterator<Socket> ite = socketSet.iterator();
+            return ite.next();
         }
-        if (set.size() > 0) {
-            return set;
+        else {
+            logger.error("getGroupSocket is blank");
         }
-        Socket socket = getAvailableSocket();
-        if (socket != null) {
-            set.add(socket);
-        }
-        return set;
+        return null;
     }
 }

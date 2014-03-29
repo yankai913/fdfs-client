@@ -18,20 +18,16 @@ public interface TrackerClient {
 
     //List<StorageConfig> getStorageList(byte cmd, String groupName, String fileName);
 
-
-    public StorageConfig getStoreStorageOne();
-
-
     public StorageConfig getStoreStorageOne(String groupName);
 
 
-    public List<StorageConfig> getStoreStorageList(String groupName);
+    public Set<StorageConfig> getStoreStorageSet(String groupName);
 
 
     public StorageConfig getFetchStorageOne(String groupName, String fileName);
 
 
-    public List<StorageConfig> getFetchStorageList(String groupName, String fileName);
+    public Set<StorageConfig> getFetchStorageSet(String groupName, String fileName);
 
 
     public GroupStat[] listGroups();
