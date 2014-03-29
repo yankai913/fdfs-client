@@ -7,9 +7,9 @@ package com.zoo.fdfs.api;
  */
 public class FdfsClientConfigurable {
 
-    private long connectTimeout = 5 * 1000;// millisecond
+    private int connectTimeout = 5 * 1000;// millisecond
 
-    private long readTimeout = 30 * 1000;
+    private int readTimeout = 30 * 1000;
 
     private String charset = "ISO8859-1";
 
@@ -36,22 +36,22 @@ public class FdfsClientConfigurable {
     }
 
 
-    public long getConnectTimeout() {
+    public int getConnectTimeout() {
         return connectTimeout;
     }
 
 
-    public void setConnectTimeout(long connectTimeout) {
+    public void setConnectTimeout(int connectTimeout) {
         this.connectTimeout = connectTimeout;
     }
 
 
-    public long getReadTimeout() {
+    public int getReadTimeout() {
         return readTimeout;
     }
 
 
-    public void setReadTimeout(long readTimeout) {
+    public void setReadTimeout(int readTimeout) {
         this.readTimeout = readTimeout;
     }
 

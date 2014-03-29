@@ -1,7 +1,9 @@
 package com.zoo.fdfs.support;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,7 +17,9 @@ import com.zoo.fdfs.api.GroupStat;
 import com.zoo.fdfs.api.StorageConfig;
 import com.zoo.fdfs.api.StorageStat;
 import com.zoo.fdfs.api.TrackerClient;
+import com.zoo.fdfs.api.TrackerGroup;
 import com.zoo.fdfs.common.ConcurrentHashSet;
+import com.zoo.fdfs.common.Strings;
 
 
 /**
@@ -26,56 +30,32 @@ import com.zoo.fdfs.common.ConcurrentHashSet;
  */
 public class SimpleTrackerClient implements TrackerClient {
 
-    private final Set<String> trackerServerAddrSet = new HashSet<String>();
+    private final Set<StorageConfig> storageServerAddrSet = new HashSet<StorageConfig>();
 
-    private final Set<String> storageServerAddrSet = new HashSet<String>();
+    private FdfsClientConfigurable fdfsClientConfigurable;
 
-    private final Map<String, Socket> addr2Socket = new HashMap<String, Socket>();
+    private TrackerGroup trackerGroup;
     
     public SimpleTrackerClient(FdfsClientConfigurable fdfsClientConfigurable) {
-        String trackerServerAddr = fdfsClientConfigurable.getTrackerServerAddr();
-        if (trackerServerAddr == null || trackerServerAddr.length() == 0) {
-            throw new IllegalArgumentException("trackerServerAddr is blank");
-        }
-        String[] trackerServerAddrArr = trackerServerAddr.trim().split(",");
-        for (String addr : trackerServerAddrArr) {
-            trackerServerAddrSet.add(addr);
-        }
-        for (String addr : trackerServerAddrSet) {
-            try {
-                Socket socket = new Socket(addr.split(":")[0], Integer.parseInt(addr.split(":")[1]));
-                //TODO set socket param
-                
-            }
-            catch (Exception e) {
-                throw new IllegalArgumentException(e);
-            }
-        }
+        this.fdfsClientConfigurable = fdfsClientConfigurable;
+        this.trackerGroup = new TrackerGroup(this.fdfsClientConfigurable);
     }
 
-
+    
     @Override
     public Set<String> getTrackerServerAddrSet() {
-        return trackerServerAddrSet;
+        return this.trackerGroup.getAvailableTrackerServerAddrSet();
     }
 
-
-    @Override
-    public Set<String> getStorageServerAddrSet() {
-        return storageServerAddrSet;
-    }
-
-
-    @Override
-    public List<StorageConfig> getStorageList(byte cmd, String groupName, String fileName) {
-        // TODO Auto-generated method stub
+    private List<StorageConfig> getStorageList(byte cmd, String groupName, String fileName) {
+        Set<Socket> socketSet = this.trackerGroup.getGroupSocket();
+        
         return null;
     }
 
 
     @Override
     public StorageConfig getStoreStorageOne() {
-        // TODO Auto-generated method stub
         return null;
     }
 

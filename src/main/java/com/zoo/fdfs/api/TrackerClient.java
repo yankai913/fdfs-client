@@ -13,11 +13,10 @@ public interface TrackerClient {
 
     public Set<String> getTrackerServerAddrSet();
 
+//    public Set<String> getStorageServerAddrSet();
 
-    public Set<String> getStorageServerAddrSet();
 
-
-    List<StorageConfig> getStorageList(byte cmd, String groupName, String fileName);
+    //List<StorageConfig> getStorageList(byte cmd, String groupName, String fileName);
 
 
     public StorageConfig getStoreStorageOne();
