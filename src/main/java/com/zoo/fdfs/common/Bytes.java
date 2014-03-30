@@ -48,13 +48,6 @@ public class Bytes {
     }
 
 
-    public static void truncToFill(byte[] src, int length, byte[] dest, int offset) {
-        for (int i = 0; i < length; i++) {
-            dest[i + offset] = src[i];
-        }
-    }
-
-
     public static void append(byte[] src, byte[] dest, int offset) {
         for (int i = 0; i < src.length; i++) {
             dest[i + offset] = src[i];

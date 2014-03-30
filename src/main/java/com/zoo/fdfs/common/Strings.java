@@ -20,8 +20,4 @@ public class Strings {
         return true;
     }
 
-
-    public static boolean isNotBlank(String str) {
-        return !isBlank(str);
-    }
 }

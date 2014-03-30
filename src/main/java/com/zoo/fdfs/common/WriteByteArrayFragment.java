@@ -45,8 +45,12 @@ public final class WriteByteArrayFragment {
 
     public void writeSubBytes(byte[] buf, int length) {
         checkSize(length);
-        for (int i = 0; i < Math.min(length, buf.length); i++) {
-            data[writeIndex++] = buf[i];
+        for (int i = 0; i < length; i++) {
+            if (i < buf.length) {
+                data[writeIndex++] = buf[i];
+            } else {
+                data[writeIndex++] = 0;
+            }
         }
     }
 

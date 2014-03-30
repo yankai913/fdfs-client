@@ -1,20 +1,12 @@
 package com.zoo.fdfs.support;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketException;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,8 +18,6 @@ import com.zoo.fdfs.api.StorageConfig;
 import com.zoo.fdfs.api.StorageStat;
 import com.zoo.fdfs.api.TrackerClient;
 import com.zoo.fdfs.api.TrackerGroup;
-import com.zoo.fdfs.common.Bytes;
-import com.zoo.fdfs.common.ConcurrentHashSet;
 import com.zoo.fdfs.common.Messages;
 import com.zoo.fdfs.common.ReadByteArrayFragment;
 import com.zoo.fdfs.common.Strings;
@@ -44,7 +34,8 @@ public class SimpleTrackerClient implements TrackerClient {
 
     private static final Logger logger = LoggerFactory.getLogger(SimpleTrackerClient.class);
 
-    private final Set<StorageConfig> storageServerAddrSet = new HashSet<StorageConfig>();
+    // private final Set<StorageConfig> storageServerAddrSet = new
+    // HashSet<StorageConfig>();
 
     private FdfsClientConfigurable fdfsClientConfigurable;
 
@@ -85,7 +76,7 @@ public class SimpleTrackerClient implements TrackerClient {
         }
         // writeBody
         {
-            if (Strings.isNotBlank(groupName)) {
+            if (!Strings.isBlank(groupName)) {
                 request.writeSubBytes(groupNameByteArr, Constants.FDFS_GROUP_NAME_MAX_LEN);
             }
         }
@@ -94,16 +85,41 @@ public class SimpleTrackerClient implements TrackerClient {
     }
 
 
-    @Override
-    public StorageConfig getStoreStorageOne(String groupName) {
+    private Socket getSocket() {
         Socket socket = trackerGroup.getAvailableSocket();
         if (socket == null) {
             throw new IllegalStateException("socket is null");
         }
+        return socket;
+    }
+
+
+    private void closeSocket(Socket socket, InputStream is, OutputStream os) {
+        try {
+            if (is != null) {
+                is.close();
+            }
+            if (os != null) {
+                os.close();
+            }
+            if (socket != null) {
+                socket.close();
+            }
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    @Override
+    public StorageConfig getStoreStorageOne(String groupName) {
+        Socket socket = getSocket();
         InputStream is = null;
         OutputStream os = null;
         try {
             os = socket.getOutputStream();
+            is = socket.getInputStream();
             byte cmd = 0;
             if (Strings.isBlank(groupName)) {
                 cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ONE;
@@ -112,7 +128,6 @@ public class SimpleTrackerClient implements TrackerClient {
                 cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITH_GROUP_ONE;
             }
             sendGetStoreStorageRequest(os, cmd, groupName);
-            is = socket.getInputStream();
             byte[] responseBody = Messages.readResponse(is);
             ReadByteArrayFragment readByteArrayFragment = new ReadByteArrayFragment(responseBody);
             String addr =
@@ -131,13 +146,7 @@ public class SimpleTrackerClient implements TrackerClient {
             logger.error(e.getMessage(), e);
         }
         finally {
-            try {
-                is.close();
-                os.close();
-                socket.close();
-            }
-            catch (Exception e) {
-            }
+            closeSocket(socket, is, os);
         }
         return null;
     }
@@ -145,15 +154,13 @@ public class SimpleTrackerClient implements TrackerClient {
 
     @Override
     public Set<StorageConfig> getStoreStorageSet(String groupName) {
-        Socket socket = trackerGroup.getAvailableSocket();
-        if (socket == null) {
-            throw new IllegalStateException("socket is null");
-        }
+        Socket socket = getSocket();
         Set<StorageConfig> set = new HashSet<StorageConfig>();
         InputStream is = null;
         OutputStream os = null;
         try {
             os = socket.getOutputStream();
+            is = socket.getInputStream();
             byte cmd = 0;
             if (Strings.isBlank(groupName)) {
                 cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ALL;
@@ -162,7 +169,6 @@ public class SimpleTrackerClient implements TrackerClient {
                 cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITH_GROUP_ALL;
             }
             sendGetStoreStorageRequest(os, cmd, groupName);
-            is = socket.getInputStream();
             byte[] responseBody = Messages.readResponse(is);
             if (responseBody.length < Constants.TRACKER_QUERY_STORAGE_STORE_BODY_LEN) {
                 throw new IllegalStateException("invalid responseBody.length, errorCode: "
@@ -197,13 +203,7 @@ public class SimpleTrackerClient implements TrackerClient {
             logger.error(e.getMessage(), e);
         }
         finally {
-            try {
-                is.close();
-                os.close();
-                socket.close();
-            }
-            catch (Exception e) {
-            }
+            closeSocket(socket, is, os);
         }
         return set;
     }
@@ -214,10 +214,8 @@ public class SimpleTrackerClient implements TrackerClient {
         byte[] groupNameByteArr = groupName.getBytes(fdfsClientConfigurable.getCharset());
         byte[] fileNameByteArr = fileName.getBytes(fdfsClientConfigurable.getCharset());
         byte errorNo = 0;
-        int bodyLength =
-                Math.min(groupNameByteArr.length, Constants.FDFS_GROUP_NAME_MAX_LEN) + fileNameByteArr.length;
-        int headerLenght = 10;
-        int totalLength = headerLenght + bodyLength;
+        int bodyLength = Constants.FDFS_GROUP_NAME_MAX_LEN + fileNameByteArr.length;
+        int totalLength = 10 + bodyLength;
         WriteByteArrayFragment request = new WriteByteArrayFragment(totalLength);
         // writeHeader
         {
@@ -236,7 +234,6 @@ public class SimpleTrackerClient implements TrackerClient {
     }
 
 
-    @Override
     public StorageConfig getFetchStorageOne(String groupName, String fileName) {
         Set<StorageConfig> set = getFetchStorageSet(groupName, fileName);
         if (set != null && set.size() > 0) {
@@ -249,18 +246,15 @@ public class SimpleTrackerClient implements TrackerClient {
 
     @Override
     public Set<StorageConfig> getFetchStorageSet(String groupName, String fileName) {
-        Socket socket = trackerGroup.getAvailableSocket();
-        if (socket == null) {
-            throw new IllegalStateException("socket is null");
-        }
+        Socket socket = getSocket();
         Set<StorageConfig> set = new HashSet<StorageConfig>();
         InputStream is = null;
         OutputStream os = null;
         try {
             os = socket.getOutputStream();
+            is = socket.getInputStream();
             byte cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_FETCH_ONE;
             sendGetFetchStorageRequest(os, cmd, groupName, fileName);
-            is = socket.getInputStream();
             byte[] responseBody = Messages.readResponse(is);
             if (responseBody.length < Constants.TRACKER_QUERY_STORAGE_FETCH_BODY_LEN) {
                 throw new IllegalStateException("invalid responseBody.length: " + responseBody.length);
@@ -287,6 +281,9 @@ public class SimpleTrackerClient implements TrackerClient {
             logger.error("getFetchStorageSet fail");
             logger.error(e.getMessage(), e);
         }
+        finally {
+            closeSocket(socket, is, os);
+        }
         return set;
 
     }
@@ -294,22 +291,101 @@ public class SimpleTrackerClient implements TrackerClient {
 
     @Override
     public GroupStat[] listGroups() {
-        // TODO Auto-generated method stub
-        return null;
+        Socket socket = getSocket();
+        byte[] header = Messages.createHeader(0L, Constants.TRACKER_PROTO_CMD_SERVER_LIST_GROUP, (byte) 0);
+        InputStream is = null;
+        OutputStream os = null;
+        GroupStat[] groupStatArr = null;
+        try {
+            os = socket.getOutputStream();
+            is = socket.getInputStream();
+            os.write(header);
+            byte[] responseBody = Messages.readResponse(is);
+            int fieldTotal = GroupStat.getFieldsTotalSize();
+            if (responseBody.length % fieldTotal != 0) {
+                throw new IllegalStateException("invalid responseBody.length");
+            }
+            groupStatArr = Messages.decode(responseBody, GroupStat.class, GroupStat.getFieldsTotalSize());
+        }
+        catch (Exception e) {
+            logger.error("listGroups fail");
+            logger.error(e.getMessage(), e);
+        }
+        finally {
+            closeSocket(socket, is, os);
+        }
+        return groupStatArr;
     }
 
 
     @Override
     public StorageStat[] listStorages(String groupName, String storageServerAddr) {
-        // TODO Auto-generated method stub
+        if (Strings.isBlank(groupName)) {
+            throw new IllegalArgumentException("groupName is blank");
+        }
+        Socket socket = getSocket();
+        InputStream is = null;
+        OutputStream os = null;
+        StorageStat[] storageStatArr = null;
+        byte cmd = Constants.TRACKER_PROTO_CMD_SERVER_LIST_STORAGE;
+        byte errorNo = 0;
+        byte[] storageServerAddrByteArr = null;
+        int storageServerAddrByteArrLen = 0;
+        try {
+            os = socket.getOutputStream();
+            is = socket.getInputStream();
+            byte[] groupNameByteArr = groupName.getBytes(fdfsClientConfigurable.getCharset());
+            if (!Strings.isBlank(storageServerAddr)) {
+                storageServerAddrByteArr = storageServerAddr.getBytes(fdfsClientConfigurable.getCharset());
+                if (storageServerAddrByteArr.length < Constants.FDFS_IPADDR_SIZE) {
+                    storageServerAddrByteArrLen = storageServerAddrByteArr.length;
+                }
+                else {
+                    storageServerAddrByteArrLen = Constants.FDFS_IPADDR_SIZE - 1;
+                }
+            }
+            int bodyLength = Constants.FDFS_GROUP_NAME_MAX_LEN + storageServerAddrByteArrLen;
+            int totalLength = 10 + bodyLength;
+            WriteByteArrayFragment request = new WriteByteArrayFragment(totalLength);
+            {
+                request.writeLong(bodyLength);
+                request.writeByte(cmd);
+                request.writeByte(errorNo);
+            }
+            {
+                request.writeSubBytes(groupNameByteArr, Constants.FDFS_GROUP_NAME_MAX_LEN);
+                if (storageServerAddrByteArr != null) {
+                    request.writeSubBytes(storageServerAddrByteArr, storageServerAddrByteArrLen);
+                }
+            }
+            os.write(request.getData());
+            byte[] responseBody = Messages.readResponse(is);
+            int fieldTotal = StorageStat.getFieldsTotalSize();
+            if (responseBody.length % fieldTotal != 0) {
+                throw new IllegalStateException("invalid responseBody.length");
+            }
+            storageStatArr =
+                    Messages.decode(responseBody, StorageStat.class, StorageStat.getFieldsTotalSize());
+        }
+        catch (Exception e) {
+            logger.error("listStorages fail");
+            logger.error(e.getMessage(), e);
+        }
+        finally {
+            closeSocket(socket, is, os);
+        }
+        return storageStatArr;
+    }
+
+
+    @Override
+    public StorageConfig getUpdateStorage(String groupName, String fileName) {
         return null;
     }
 
 
     @Override
-    public StorageStat[] listStorages(String groupName) {
-        // TODO Auto-generated method stub
-        return null;
+    public boolean deleteStorage(TrackerGroup trackerGroup, String groupName, String storageServerAddr) {
+        return false;
     }
-
 }

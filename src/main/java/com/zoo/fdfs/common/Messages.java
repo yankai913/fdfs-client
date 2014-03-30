@@ -4,8 +4,9 @@ import static com.zoo.fdfs.api.Constants.FDFS_GROUP_NAME_MAX_LEN;
 import static com.zoo.fdfs.api.Constants.TRACKER_PROTO_CMD_RESP;
 
 import java.io.InputStream;
+import java.lang.reflect.Array;
 
-import com.zoo.fdfs.api.Constants;
+import com.zoo.fdfs.api.BaseStat;
 
 
 /**
@@ -14,36 +15,7 @@ import com.zoo.fdfs.api.Constants;
  * @date 2014-3-13
  */
 public class Messages {
-            
-    public static byte[] createRequest(String groupName, String charsetName) throws Exception {
-        byte[] groupNameByteArr = null;
-        byte cmd = 0;
-        byte errorNo = 0;
-        int bodyLength = 0;
-        if (Strings.isBlank(groupName)) {
-            cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ONE;
-            bodyLength = 0;
-        } else {
-            cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITH_GROUP_ONE;
-            bodyLength = Constants.FDFS_GROUP_NAME_MAX_LEN;
-            groupNameByteArr = groupName.getBytes(charsetName);
-        }
-        int headerLenght = 10;
-        int totalLength = headerLenght + bodyLength;
-        WriteByteArrayFragment request = new WriteByteArrayFragment(totalLength);
-        {
-            request.writeLong(bodyLength);
-            request.writeByte(cmd);
-            request.writeByte(errorNo);
-        }
-        {
-            if (Strings.isNotBlank(groupName)) {
-                request.writeSubBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
-            }
-        }
-        return request.getData();
-    }
-    
+
     public static byte[] createRequest(String groupName, String fileName, String charsetName, byte cmd,
             byte errorNo) throws Exception {
         byte[] groupNameByteArr = groupName.getBytes(charsetName);
@@ -106,5 +78,36 @@ public class Messages {
                     + ", readBodyLength: " + readBodyLength);
         }
         return body;
+    }
+
+
+    public static byte[] createHeader(long bodyLength, byte cmd, byte errorNo) {
+        WriteByteArrayFragment header = new WriteByteArrayFragment(10);
+        header.writeLong(bodyLength);
+        header.writeByte(cmd);
+        header.writeByte(errorNo);
+        return header.getData();
+    }
+
+
+    @SuppressWarnings("unchecked")
+    public static <T extends BaseStat> T[] decode(byte[] bodyBytes, Class<T> clazz, int fieldsTotalSize) {
+        if (bodyBytes.length % fieldsTotalSize != 0) {
+            throw new IllegalStateException("invalid bodyBytes.length, bodyBytes.length=" + bodyBytes.length);
+        }
+        int count = bodyBytes.length / fieldsTotalSize;
+        T[] results = (T[]) Array.newInstance(clazz, count);
+        int offset = 0;
+        for (int i = 0; i < results.length; i++) {
+            try {
+                results[i] = clazz.newInstance();
+                results[i].setFields(bodyBytes, offset);
+                offset += fieldsTotalSize;
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        return results;
     }
 }
