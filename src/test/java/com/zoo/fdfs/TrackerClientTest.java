@@ -7,11 +7,18 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.zoo.fdfs.api.FdfsClientConfigurable;
+import com.zoo.fdfs.api.GroupStat;
 import com.zoo.fdfs.api.StorageConfig;
+import com.zoo.fdfs.api.StorageStat;
 import com.zoo.fdfs.api.TrackerClient;
 import com.zoo.fdfs.support.SimpleTrackerClient;
 
 
+/**
+ * 
+ * @author yankai913@gmail.com
+ * @date 2014-4-2
+ */
 public class TrackerClientTest {
 
     static TrackerClient trackerClient = null;
@@ -19,7 +26,7 @@ public class TrackerClientTest {
 
     @BeforeClass
     public static void execBefore() {
-        String addr = "192.168.81.129:22122,192.168.81.129:22122";
+        String addr = "211.155.225.210:22122,211.155.225.210:22122";
         FdfsClientConfigurable fdfsClientConfigurable = new FdfsClientConfigurable(addr);
         trackerClient = new SimpleTrackerClient(fdfsClientConfigurable);
     }
@@ -50,4 +57,27 @@ public class TrackerClientTest {
         System.out.println(set);
         Assert.assertNotNull(set);
     }
+
+
+    @Test
+    public void testListGroups() {
+        GroupStat[] groupStatArr = trackerClient.listGroups();
+        Assert.assertNotNull(groupStatArr);
+        for (GroupStat gs : groupStatArr) {
+            System.out.println(gs);
+        }
+    }
+
+
+    @Test
+    public void testListStorages() {
+        String groupName = "group1";
+        String storageServerAddr = "211.155.225.210:23000";
+        StorageStat[] storageStatArr = trackerClient.listStorages(groupName, storageServerAddr);
+        Assert.assertNotNull(storageStatArr);
+        for (StorageStat ss : storageStatArr) {
+            System.out.println(ss);
+        }
+    }
+
 }

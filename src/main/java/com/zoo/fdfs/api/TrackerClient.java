@@ -2,6 +2,7 @@ package com.zoo.fdfs.api;
 
 import java.util.Set;
 
+
 /**
  * 
  * @author yankai913@gmail.com
@@ -32,4 +33,6 @@ public interface TrackerClient {
 
     public boolean deleteStorage(TrackerGroup trackerGroup, String groupName, String storageServerAddr);
 
+
+    public boolean deleteStorage(String groupName, String storageServerAddr);
 }

@@ -18,6 +18,7 @@ public abstract class BaseStat {
 
     protected String charset = "ISO8859-1";
 
+
     public BaseStat(String charset) {
         this.charset = charset;
     }
@@ -38,7 +39,7 @@ public abstract class BaseStat {
 
     protected String readString(byte[] bs, int offset, FieldMeta filedInfo) {
         try {
-            return new String(bs, offset + filedInfo.offset, filedInfo.size, this.charset);
+            return new String(bs, offset + filedInfo.offset, filedInfo.size, this.charset).trim();
         }
         catch (UnsupportedEncodingException e) {
             e.printStackTrace();
@@ -53,7 +54,7 @@ public abstract class BaseStat {
 
 
     protected int readInt(byte[] bs, int offset, FieldMeta filedInfo) {
-        return Bytes.bytes2int(bs, offset + filedInfo.offset);
+        return (int) Bytes.bytes2long(bs, offset + filedInfo.offset);
     }
 
 

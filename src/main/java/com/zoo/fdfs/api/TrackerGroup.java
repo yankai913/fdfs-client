@@ -84,7 +84,7 @@ public class TrackerGroup {
     }
 
 
-    private Set<Socket> getGroupSocket() {
+    public Set<Socket> getGroupSocket() {
         Set<Socket> set = new HashSet<Socket>();
         Iterator<String> availableIterator = availableTrackerServerAddrSet.iterator();
         while (availableIterator.hasNext()) {

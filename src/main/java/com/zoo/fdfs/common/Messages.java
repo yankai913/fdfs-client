@@ -5,6 +5,7 @@ import static com.zoo.fdfs.api.Constants.TRACKER_PROTO_CMD_RESP;
 
 import java.io.InputStream;
 import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
 
 import com.zoo.fdfs.api.BaseStat;
 
@@ -50,7 +51,7 @@ public class Messages {
     }
 
 
-    public static byte[] readResponse(InputStream is) throws Exception {
+    public static ResponseBody readResponse(InputStream is, int expectBodyLenth) throws Exception {
         byte[] respHeader = new byte[10];
         int length = is.read(respHeader);
         // 判断读取的header长度
@@ -63,7 +64,7 @@ public class Messages {
         }
         // 异常标志位，0是正常，非0异常。
         if (respHeader[9] != 0) {
-            throw new IllegalStateException("invalid errorNo , errorNo: " + respHeader[9]);
+            return new ResponseBody(respHeader[9], null);
         }
         // 判断body的长度。
         long bodyLength = Bytes.bytes2long(respHeader, 0);
@@ -77,7 +78,11 @@ public class Messages {
             throw new IllegalStateException("invalid read body , bodyLength: " + bodyLength
                     + ", readBodyLength: " + readBodyLength);
         }
-        return body;
+        if (expectBodyLenth > 0 && readBodyLength != expectBodyLenth) {
+            throw new IllegalStateException("readBodyLength:" + readBodyLength + ", expectBodyLenth:"
+                    + expectBodyLenth);
+        }
+        return new ResponseBody(respHeader[9], body);
     }
 
 
@@ -91,7 +96,8 @@ public class Messages {
 
 
     @SuppressWarnings("unchecked")
-    public static <T extends BaseStat> T[] decode(byte[] bodyBytes, Class<T> clazz, int fieldsTotalSize) {
+    public static <T extends BaseStat> T[] decode(byte[] bodyBytes, Class<T> clazz, int fieldsTotalSize,
+            String charset) {
         if (bodyBytes.length % fieldsTotalSize != 0) {
             throw new IllegalStateException("invalid bodyBytes.length, bodyBytes.length=" + bodyBytes.length);
         }
@@ -100,7 +106,8 @@ public class Messages {
         int offset = 0;
         for (int i = 0; i < results.length; i++) {
             try {
-                results[i] = clazz.newInstance();
+                Constructor<T> constructor = clazz.getConstructor(String.class);
+                results[i] = constructor.newInstance(charset);
                 results[i].setFields(bodyBytes, offset);
                 offset += fieldsTotalSize;
             }
