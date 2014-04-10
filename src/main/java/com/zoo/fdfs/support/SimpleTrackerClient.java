@@ -10,7 +10,7 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.zoo.fdfs.api.Constants;
-import com.zoo.fdfs.api.FdfsClientConfigurable;
+import com.zoo.fdfs.api.FdfsClientConfig;
 import com.zoo.fdfs.api.GroupStat;
 import com.zoo.fdfs.api.StorageConfig;
 import com.zoo.fdfs.api.StorageStat;
@@ -33,14 +33,14 @@ public class SimpleTrackerClient implements TrackerClient {
 
     private static final Logger logger = LoggerFactory.getLogger(SimpleTrackerClient.class);
 
-    private FdfsClientConfigurable fdfsClientConfigurable;
+    private FdfsClientConfig fdfsClientConfigurable;
 
     private TrackerGroup trackerGroup;
 
     private byte errorNo;
 
 
-    public SimpleTrackerClient(FdfsClientConfigurable fdfsClientConfigurable) {
+    public SimpleTrackerClient(FdfsClientConfig fdfsClientConfigurable) {
         this.fdfsClientConfigurable = fdfsClientConfigurable;
         this.trackerGroup = new TrackerGroup(this.fdfsClientConfigurable);
     }

@@ -24,10 +24,10 @@ public class TrackerGroup {
 
     private final Set<String> unavailableTrackerServerAddrSet = new HashSet<String>();
 
-    private FdfsClientConfigurable fdfsClientConfigurable;
+    private FdfsClientConfig fdfsClientConfigurable;
 
 
-    public TrackerGroup(FdfsClientConfigurable fdfsClientConfigurable) {
+    public TrackerGroup(FdfsClientConfig fdfsClientConfigurable) {
         this.fdfsClientConfigurable = fdfsClientConfigurable;
         if (Strings.isBlank(this.fdfsClientConfigurable.getTrackerServerAddr())) {
             throw new IllegalArgumentException("trackerServerAddr is blank");

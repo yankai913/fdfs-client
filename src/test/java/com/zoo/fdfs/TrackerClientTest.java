@@ -6,7 +6,7 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.zoo.fdfs.api.FdfsClientConfigurable;
+import com.zoo.fdfs.api.FdfsClientConfig;
 import com.zoo.fdfs.api.GroupStat;
 import com.zoo.fdfs.api.StorageConfig;
 import com.zoo.fdfs.api.StorageStat;
@@ -27,7 +27,7 @@ public class TrackerClientTest {
     @BeforeClass
     public static void execBefore() {
         String addr = "211.155.225.210:22122,211.155.225.210:22122";
-        FdfsClientConfigurable fdfsClientConfigurable = new FdfsClientConfigurable(addr);
+        FdfsClientConfig fdfsClientConfigurable = new FdfsClientConfig(addr);
         trackerClient = new SimpleTrackerClient(fdfsClientConfigurable);
     }
 
@@ -80,4 +80,9 @@ public class TrackerClientTest {
         }
     }
 
+    @Test
+    public void testDeleteStorage() {
+        //TODO 暂时先不删除，最后做这个测试。
+        
+    }
 }
