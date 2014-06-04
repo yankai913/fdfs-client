@@ -1,12 +1,12 @@
 package com.zoo.fdfs.support;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+
 import com.zoo.fdfs.api.Connection;
+import com.zoo.fdfs.common.Circle;
 
 
 /**
@@ -17,41 +17,39 @@ import com.zoo.fdfs.api.Connection;
  */
 public class SimpleConnectionPool {
 
-    private int queueCount;
+    private int elementLength;// 池里所有元素的总个数
 
-    private int poolSize;
+    private int circleCapacity = 5;// 默认设置环形数据结构里容量为5，有5个槽
 
-    private AtomicInteger putSeq = new AtomicInteger(0);
-
-    private AtomicInteger getSeq = new AtomicInteger(0);
-
-    private List<LinkedBlockingQueue<Connection>> queueList;
+    private Circle<LinkedBlockingQueue<Connection>> circleData;
 
 
-    public SimpleConnectionPool(int poolSize) {
-        this.poolSize = poolSize;
-        this.queueCount = this.poolSize / 5;
-        List<LinkedBlockingQueue<Connection>> list =
-                new ArrayList<LinkedBlockingQueue<Connection>>(getQueueCount());
-        for (int i = 0; i < getQueueCount(); i++) {
-            list.add(new LinkedBlockingQueue<Connection>());
-        }
-        this.queueList = Collections.unmodifiableList(list);
+    @SuppressWarnings("unchecked")
+    public SimpleConnectionPool(int elementLength, int circleCapacity) {
+        this.elementLength = elementLength;
+        this.circleCapacity = circleCapacity;
+        List<LinkedBlockingQueue<Connection>> data =
+                new ArrayList<LinkedBlockingQueue<Connection>>(this.circleCapacity);
+        this.circleData =
+                new Circle<LinkedBlockingQueue<Connection>>(
+                    (LinkedBlockingQueue<Connection>[]) data.toArray());
     }
 
 
-    public int getQueueCount() {
-        return this.queueCount;
+    public int getElementLength() {
+        return elementLength;
+    }
+
+
+    public int getCircleCapacity() {
+        return circleCapacity;
     }
 
 
     public void put(Connection connection) {
-        int index = putSeq.incrementAndGet() % getQueueCount();
-        if (index < 0) {
-            index = Math.abs(index);
-        }
+
         try {
-            queueList.get(index).put(connection);
+            circleData.writeNext().put(connection);
         }
         catch (InterruptedException e) {
         }
@@ -59,20 +57,15 @@ public class SimpleConnectionPool {
 
 
     public Connection get() {
-        for (int i = 0; i < getQueueCount(); i++) {
-            int index = getSeq.incrementAndGet() % getQueueCount();
-            if (index < 0) {
-                index = Math.abs(index);
+
+        try {
+            Connection connection = circleData.readNext().poll(100, TimeUnit.MILLISECONDS);
+            if (connection != null) {
+                return connection;
             }
-            try {
-                Connection connection = queueList.get(index).poll(100, TimeUnit.MILLISECONDS);
-                if (connection != null) {
-                    return connection;
-                }
-            }
-            catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+        }
+        catch (InterruptedException e) {
+            e.printStackTrace();
         }
         return null;
     }

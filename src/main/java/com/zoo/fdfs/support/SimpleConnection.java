@@ -11,6 +11,7 @@ import com.zoo.fdfs.api.Connection;
 
 /**
  * Prototype, Threadsafe
+ * 
  * @author yankai913@gmail.com
  * @date 2014-4-4
  */
@@ -62,8 +63,9 @@ public class SimpleConnection implements Connection {
         this.lastReadTimestamp = System.currentTimeMillis();
         InputStream is = this.socket.getInputStream();
         int available = is.available();
-        
-        return null;
+        byte[] arr = new byte[available];
+        is.read(arr);
+        return arr;
     }
 
 
@@ -77,7 +79,7 @@ public class SimpleConnection implements Connection {
 
     @Override
     public void close() throws Exception {
-        if(this.socket != null && !this.socket.isClosed()) {
+        if (this.socket != null && !this.socket.isClosed()) {
             this.socket.close();
         }
     }
