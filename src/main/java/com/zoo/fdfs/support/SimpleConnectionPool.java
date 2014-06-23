@@ -24,15 +24,17 @@ public class SimpleConnectionPool {
     private Circle<LinkedBlockingQueue<Connection>> circleData;
 
 
-    @SuppressWarnings("unchecked")
+    public SimpleConnectionPool(int elementLength) {
+        this(elementLength, 5);
+    }
+
+
     public SimpleConnectionPool(int elementLength, int circleCapacity) {
         this.elementLength = elementLength;
         this.circleCapacity = circleCapacity;
         List<LinkedBlockingQueue<Connection>> data =
                 new ArrayList<LinkedBlockingQueue<Connection>>(this.circleCapacity);
-        this.circleData =
-                new Circle<LinkedBlockingQueue<Connection>>(
-                    (LinkedBlockingQueue<Connection>[]) data.toArray());
+        this.circleData = new Circle<LinkedBlockingQueue<Connection>>(data);
     }
 
 
@@ -47,17 +49,16 @@ public class SimpleConnectionPool {
 
 
     public void put(Connection connection) {
-
         try {
             circleData.writeNext().put(connection);
         }
         catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 
 
     public Connection get() {
-
         try {
             Connection connection = circleData.readNext().poll(100, TimeUnit.MILLISECONDS);
             if (connection != null) {

@@ -1,17 +1,30 @@
 package com.zoo.fdfs.support;
 
+import java.io.UnsupportedEncodingException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
+import static com.zoo.fdfs.api.Constants.FDFS_GROUP_NAME_MAX_LEN;
+import static com.zoo.fdfs.api.Constants.STORAGE_PROTO_CMD_DOWNLOAD_FILE;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.zoo.fdfs.api.Connection;
+import com.zoo.fdfs.api.Constants;
 import com.zoo.fdfs.api.FdfsClientConfig;
+import com.zoo.fdfs.api.FdfsException;
 import com.zoo.fdfs.api.FileInfo;
 import com.zoo.fdfs.api.StorageClient;
 import com.zoo.fdfs.api.StorageConfig;
 import com.zoo.fdfs.api.TrackerClient;
+import com.zoo.fdfs.common.Bytes;
+import com.zoo.fdfs.common.Circle;
 import com.zoo.fdfs.common.Collections;
 import com.zoo.fdfs.common.Strings;
+import com.zoo.fdfs.common.WriteByteArrayFragment;
 
 
 /**
@@ -21,6 +34,8 @@ import com.zoo.fdfs.common.Strings;
  * @date 2014-4-3
  */
 public class SimpleStrorageClient implements StorageClient {
+
+    private static final Logger logger = LoggerFactory.getLogger(SimpleStrorageClient.class);
 
     private FdfsClientConfig fdfsClientConfig;
 
@@ -40,29 +55,51 @@ public class SimpleStrorageClient implements StorageClient {
 
 
     public TrackerClient getTrackerClient() {
-        return this.trackerClient;
+        return trackerClient;
     }
 
 
     public FdfsClientConfig getFdfsClientConfig() {
-        return this.fdfsClientConfig;
+        return fdfsClientConfig;
+    }
+
+
+    Connection newConnection(InetSocketAddress inetSocketAddress) throws Exception {
+        int readTimeout = getFdfsClientConfig().getReadTimeout();
+        int connectTimeout = getFdfsClientConfig().getConnectTimeout();
+        Connection con = new SimpleConnection(readTimeout);
+        con.connect(inetSocketAddress, connectTimeout);
+        return con;
     }
 
 
     public Connection getFetchableConnection(String groupName, String localFileName, String fileExtName,
             String masterFileName, String prefixName) {
-        if (!Strings.isBlank(groupName) && !Strings.isBlank(masterFileName) && !Strings.isBlank(prefixName)) {
-            throw new IllegalArgumentException("");
+        if (Strings.isBlank(groupName) || Strings.isBlank(masterFileName) || Strings.isBlank(prefixName)) {
+            throw new IllegalArgumentException("groupName, masterFileName or prefixName is blank");
         }
-        Set<StorageConfig> storageConfigSet = this.trackerClient.getFetchStorageSet(groupName, masterFileName);
-        if (!Collections.isNotEmpty(storageConfigSet) ) {
-            throw new IllegalStateException("storageConfigSet is blank");
+        Set<StorageConfig> storageConfigSet = trackerClient.getFetchStorageSet(groupName, masterFileName);
+        if (!Collections.isNotEmpty(storageConfigSet)) {
+            throw new IllegalStateException("storageConfigSet is empty");
         }
+        Circle<StorageConfig> addressCircle = new Circle<StorageConfig>(storageConfigSet);
         int fetchSize = getFdfsClientConfig().getFetchPoolSize();
-        for (int i = 0; i < fetchSize; i++) {
-            
+        fetchConnectionPool = new SimpleConnectionPool(fetchSize);
+        for (int i = 0; i <= fetchSize; i++) {
+            InetSocketAddress inetSocketAddress = addressCircle.readNext().getInetSocketAddress();
+            try {
+                fetchConnectionPool.put(newConnection(inetSocketAddress));
+            }
+            catch (Exception e) {
+                logger.error("newConnection fail, inetSocketAddress=[{}]", inetSocketAddress, e);
+            }
         }
-        return null;
+        int realFetchSize = fetchConnectionPool.getElementLength();
+        if (realFetchSize != fetchSize) {
+            throw new FdfsException("getFetchableConnection fail, realFetchSize=[" + realFetchSize
+                    + "] <> fetchSize=[" + fetchSize + "]");
+        }
+        return fetchConnectionPool.get();
     }
 
 
@@ -285,7 +322,6 @@ public class SimpleStrorageClient implements StorageClient {
 
     @Override
     public byte[] downloadFile(String groupName, String remoteFileName, long fileOffset, long downloadBytes) {
-        // TODO Auto-generated method stub
         return null;
     }
 
@@ -347,4 +383,39 @@ public class SimpleStrorageClient implements StorageClient {
         return null;
     }
 
+
+    void sendDownloadRequest(String groupName, String remoteFileName, long fileOffset, long downloadBytes) {
+        byte[] groupNameByteArr = null;
+        byte[] remoteFileNameByteArr = null;
+        try {
+            groupNameByteArr = groupName.getBytes(fdfsClientConfig.getCharset());
+            remoteFileNameByteArr = remoteFileName.getBytes(fdfsClientConfig.getCharset());
+        }
+        catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+        byte errorNo = 0;
+        int headerLength = 10;
+        int fileOffsetByteArrLength = 8;// long型是8个字节。
+        int downloadBytesByteArrLength = 8;
+        int groupNameByteArrLength = FDFS_GROUP_NAME_MAX_LEN;
+        int remoteFileNameByteArrLength = remoteFileNameByteArr.length;
+        int bodyLength = fileOffsetByteArrLength + downloadBytesByteArrLength + groupNameByteArrLength
+                + remoteFileNameByteArrLength;
+        int requestTotalLength = headerLength + bodyLength;
+        WriteByteArrayFragment request = new WriteByteArrayFragment(requestTotalLength);
+        //fill header
+        {
+            request.writeLong(bodyLength);
+            request.writeByte(STORAGE_PROTO_CMD_DOWNLOAD_FILE);
+            request.writeByte(errorNo);
+        }
+        //fill body
+        {
+            request.writeLong(fileOffset);
+            request.writeLong(downloadBytes);
+            request.writeSubBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
+            request.writeBytes(remoteFileNameByteArr);
+        }
+    }
 }
