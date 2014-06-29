@@ -96,4 +96,15 @@ public class SimpleConnection implements Connection {
         return this.lastWriteTimestamp;
     }
 
+
+    @Override
+    public InputStream getInputStream() throws Exception {
+        return this.socket.getInputStream();
+    }
+
+
+    @Override
+    public OutputStream getOutputStream() throws Exception {
+        return this.socket.getOutputStream();
+    }
 }

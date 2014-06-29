@@ -8,6 +8,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 
 import com.zoo.fdfs.api.BaseStat;
+import com.zoo.fdfs.api.Constants;
 
 
 /**
@@ -116,5 +117,39 @@ public class Messages {
             }
         }
         return results;
+    }
+    
+    public static ResponseBody readStorageResponse(InputStream is, int expectBodyLenth) throws Exception {
+        byte[] respHeader = new byte[10];
+        int length = is.read(respHeader);
+        // 判断读取的header长度
+        if (length != respHeader.length) {
+            throw new IllegalStateException("read responseHeader fail, length not enouth, length: " + length);
+        }
+        // 判断相应的标志位
+        if (respHeader[8] != Constants.STORAGE_PROTO_CMD_RESP) {
+            throw new IllegalStateException("invalid responseHeader cmd, cmd: " + respHeader[8]);
+        }
+        // 异常标志位，0是正常，非0异常。
+        if (respHeader[9] != 0) {
+            return new ResponseBody(respHeader[9], null);
+        }
+        // 判断body的长度。
+        long bodyLength = Bytes.bytes2long(respHeader, 0);
+        if (bodyLength < 0) {
+            throw new IllegalStateException("invalid bodyLength, bodyLength: " + bodyLength);
+        }
+        byte[] body = new byte[(int) bodyLength];
+        int readBodyLength = is.read(body);
+        // 验证body读完整。
+        if (bodyLength != readBodyLength) {
+            throw new IllegalStateException("invalid read body , bodyLength: " + bodyLength
+                    + ", readBodyLength: " + readBodyLength);
+        }
+        if (expectBodyLenth > 0 && readBodyLength != expectBodyLenth) {
+            throw new IllegalStateException("readBodyLength:" + readBodyLength + ", expectBodyLenth:"
+                    + expectBodyLenth);
+        }
+        return new ResponseBody(respHeader[9], body);
     }
 }

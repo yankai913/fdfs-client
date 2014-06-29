@@ -1,14 +1,18 @@
 package com.zoo.fdfs.support;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
 import static com.zoo.fdfs.api.Constants.FDFS_GROUP_NAME_MAX_LEN;
 import static com.zoo.fdfs.api.Constants.STORAGE_PROTO_CMD_DOWNLOAD_FILE;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,9 +24,10 @@ import com.zoo.fdfs.api.FileInfo;
 import com.zoo.fdfs.api.StorageClient;
 import com.zoo.fdfs.api.StorageConfig;
 import com.zoo.fdfs.api.TrackerClient;
-import com.zoo.fdfs.common.Bytes;
 import com.zoo.fdfs.common.Circle;
 import com.zoo.fdfs.common.Collections;
+import com.zoo.fdfs.common.Messages;
+import com.zoo.fdfs.common.ResponseBody;
 import com.zoo.fdfs.common.Strings;
 import com.zoo.fdfs.common.WriteByteArrayFragment;
 
@@ -46,6 +51,8 @@ public class SimpleStrorageClient implements StorageClient {
     private SimpleConnectionPool storageConnectionPool;
 
     private SimpleConnectionPool updateConnectionPool;
+
+    private byte errorNo;
 
 
     public SimpleStrorageClient(TrackerClient trackerClient, FdfsClientConfig fdfsClientConfig) {
@@ -73,12 +80,11 @@ public class SimpleStrorageClient implements StorageClient {
     }
 
 
-    public Connection getFetchableConnection(String groupName, String localFileName, String fileExtName,
-            String masterFileName, String prefixName) {
-        if (Strings.isBlank(groupName) || Strings.isBlank(masterFileName) || Strings.isBlank(prefixName)) {
-            throw new IllegalArgumentException("groupName, masterFileName or prefixName is blank");
+    public Connection getFetchableConnection(String groupName, String remoteFileName) {
+        if (Strings.isBlank(groupName) || Strings.isBlank(remoteFileName)) {
+            throw new IllegalArgumentException("groupName, remoteFileName is blank");
         }
-        Set<StorageConfig> storageConfigSet = trackerClient.getFetchStorageSet(groupName, masterFileName);
+        Set<StorageConfig> storageConfigSet = trackerClient.getFetchStorageSet(groupName, remoteFileName);
         if (!Collections.isNotEmpty(storageConfigSet)) {
             throw new IllegalStateException("storageConfigSet is empty");
         }
@@ -103,19 +109,25 @@ public class SimpleStrorageClient implements StorageClient {
     }
 
 
-    public Connection getUpdateableConnection() {
+    public Connection getUpdateableConnection(String groupName, String remoteFileName) {
         return null;
     }
 
 
-    public Connection getWriteableConnection() {
+    public Connection getWriteableConnection(String groupName) {
         return null;
     }
 
 
     @Override
     public String[] uploadFile(String localFileName, String fileExtName, Map<String, String> meta) {
+        return null;
+    }
 
+
+    @Override
+    public String[] uploadFile(String groupName, String localFileName, String fileExtName,
+            Map<String, String> meta) {
         return null;
     }
 
@@ -159,7 +171,37 @@ public class SimpleStrorageClient implements StorageClient {
     @Override
     public String[] uploadFile(String groupName, String masterFileName, String prefixName,
             String localFileName, String fileExtName, Map<String, String> meta) {
-        // TODO Auto-generated method stub
+        if (Strings.isBlank(fileExtName)) {
+            int idx = localFileName.lastIndexOf(".");
+            if (idx > 0 && (localFileName.length() - idx <= Constants.FDFS_FILE_EXT_NAME_MAX_LEN + 1)) {
+                fileExtName = localFileName.substring(idx + 1);
+            }
+        }
+        boolean uploadSlave = (!Strings.isBlank(groupName)) && (!Strings.isBlank(masterFileName)) && (prefixName != null);
+        byte[] fileExtNameByteArr = null;
+        //new byte[Constants.FDFS_FILE_EXT_NAME_MAX_LEN];
+        try {
+            fileExtNameByteArr = localFileName.getBytes(fdfsClientConfig.getCharset());
+        }
+        catch (UnsupportedEncodingException e) {
+        }
+        Connection con = null;
+        if (uploadSlave) {
+            con = getUpdateableConnection(groupName, masterFileName);
+            byte[] prefixNameByteArr = null;
+            byte[] masterFileNameByteArr = null;
+            //new byte[Constants.FDFS_FILE_EXT_NAME_MAX_LEN];
+            try {
+                prefixNameByteArr = prefixName.getBytes(fdfsClientConfig.getCharset());
+                masterFileNameByteArr = masterFileName.getBytes(fdfsClientConfig.getCharset());
+            }
+            catch (UnsupportedEncodingException e) {
+            }
+            
+        } else {
+            con = getWriteableConnection(groupName);
+        }
+        
         return null;
     }
 
@@ -315,20 +357,44 @@ public class SimpleStrorageClient implements StorageClient {
 
     @Override
     public byte[] downloadFile(String groupName, String remoteFileName) {
-        // TODO Auto-generated method stub
-        return null;
+        long fileOffset = 0;
+        long downloadBytes = 0;
+        return downloadFile(groupName, remoteFileName, fileOffset, downloadBytes);
     }
 
 
     @Override
     public byte[] downloadFile(String groupName, String remoteFileName, long fileOffset, long downloadBytes) {
+        Connection con = getFetchableConnection(groupName, remoteFileName);
+        OutputStream os = null;
+        InputStream is = null;
+        try {
+            os = con.getOutputStream();
+            is = con.getInputStream();
+            sendDownloadRequest(os, groupName, remoteFileName, fileOffset, downloadBytes);
+            ResponseBody responseBody = Messages.readStorageResponse(is, -1);
+            this.errorNo = responseBody.getErrorNo();
+            if (this.errorNo != 0) {
+                return null;
+            }
+            byte[] body = responseBody.getBody();
+            return body;
+        }
+        catch (Exception e) {
+            logger.error("downloadFile(String, String, long, long) fail");
+            logger.error(e.getMessage(), e);
+        }
+        finally {
+            closeSocket(con, is, os);
+        }
         return null;
     }
 
 
     @Override
     public int downloadFile(String groupName, String remoteFileName, String localFileName) {
-        // TODO Auto-generated method stub
+        byte[] data = downloadFile(groupName, remoteFileName);
+        writeLocalFile(data, localFileName);
         return 0;
     }
 
@@ -336,14 +402,14 @@ public class SimpleStrorageClient implements StorageClient {
     @Override
     public int downloadFile(String groupName, String remoteFileName, long fileOffset, long downloadBytes,
             String localFileName) {
-        // TODO Auto-generated method stub
+        byte[] data = downloadFile(groupName, remoteFileName, fileOffset, downloadBytes);
+        writeLocalFile(data, localFileName);
         return 0;
     }
 
 
     @Override
     public int downloadFileResult(String groupName, String remoteFileName) {
-        // TODO Auto-generated method stub
         return 0;
     }
 
@@ -384,7 +450,8 @@ public class SimpleStrorageClient implements StorageClient {
     }
 
 
-    void sendDownloadRequest(String groupName, String remoteFileName, long fileOffset, long downloadBytes) {
+    void sendDownloadRequest(OutputStream os, String groupName, String remoteFileName, long fileOffset,
+            long downloadBytes) throws Exception {
         byte[] groupNameByteArr = null;
         byte[] remoteFileNameByteArr = null;
         try {
@@ -400,22 +467,62 @@ public class SimpleStrorageClient implements StorageClient {
         int downloadBytesByteArrLength = 8;
         int groupNameByteArrLength = FDFS_GROUP_NAME_MAX_LEN;
         int remoteFileNameByteArrLength = remoteFileNameByteArr.length;
-        int bodyLength = fileOffsetByteArrLength + downloadBytesByteArrLength + groupNameByteArrLength
-                + remoteFileNameByteArrLength;
+        int bodyLength =
+                fileOffsetByteArrLength + downloadBytesByteArrLength + groupNameByteArrLength
+                        + remoteFileNameByteArrLength;
         int requestTotalLength = headerLength + bodyLength;
         WriteByteArrayFragment request = new WriteByteArrayFragment(requestTotalLength);
-        //fill header
+        // fill header
         {
             request.writeLong(bodyLength);
             request.writeByte(STORAGE_PROTO_CMD_DOWNLOAD_FILE);
             request.writeByte(errorNo);
         }
-        //fill body
+        // fill body
         {
             request.writeLong(fileOffset);
             request.writeLong(downloadBytes);
             request.writeSubBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
             request.writeBytes(remoteFileNameByteArr);
+        }
+        os.write(request.getData());
+    }
+
+
+    private void closeSocket(Connection con, InputStream is, OutputStream os) {
+        try {
+            if (is != null) {
+                is.close();
+            }
+            if (os != null) {
+                os.close();
+            }
+            if (con != null) {
+                con.close();
+            }
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    private void writeLocalFile(byte[] data, String localFileName) {
+        FileOutputStream fos = null;
+        try {
+            fos = new FileOutputStream(localFileName);
+            fos.write(data);
+        }
+        catch (Exception e) {
+            logger.error("downloadFile(String, String, String)");
+            logger.error(e.getMessage(), e);
+        }
+        finally {
+            try {
+                fos.close();
+            }
+            catch (IOException e) {
+            }
         }
     }
 }

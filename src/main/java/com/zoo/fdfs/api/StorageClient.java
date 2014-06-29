@@ -19,6 +19,8 @@ public interface StorageClient {
     public String[] uploadFile(String localFileName, String fileExtName, Map<String, String> meta);
 
 
+    public String[] uploadFile(String groupName, String localFileName, String fileExtName, Map<String, String> meta);
+    
     public String[] uploadFile(byte[] fileBuff, int offset, int length, String fileExtName,
             Map<String, String> meta);
 
