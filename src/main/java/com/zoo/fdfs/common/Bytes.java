@@ -58,4 +58,15 @@ public class Bytes {
     public static void append(byte b, byte[] dest, int offset) {
         dest[offset] = b;
     }
+
+
+    public static byte[] wrap(byte[] src, int length) {
+        if (src.length == length) {
+            return src;
+        }
+        byte[] result = new byte[length];
+        int minLength = Math.min(src.length, result.length);
+        System.arraycopy(src, 0, result, 0, minLength);
+        return result;
+    }
 }

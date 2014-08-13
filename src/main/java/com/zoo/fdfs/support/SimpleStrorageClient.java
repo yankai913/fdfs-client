@@ -24,6 +24,7 @@ import com.zoo.fdfs.api.FileInfo;
 import com.zoo.fdfs.api.StorageClient;
 import com.zoo.fdfs.api.StorageConfig;
 import com.zoo.fdfs.api.TrackerClient;
+import com.zoo.fdfs.common.Bytes;
 import com.zoo.fdfs.common.Circle;
 import com.zoo.fdfs.common.Collections;
 import com.zoo.fdfs.common.Messages;
@@ -182,6 +183,7 @@ public class SimpleStrorageClient implements StorageClient {
         //new byte[Constants.FDFS_FILE_EXT_NAME_MAX_LEN];
         try {
             fileExtNameByteArr = localFileName.getBytes(fdfsClientConfig.getCharset());
+            fileExtNameByteArr = Bytes.wrap(fileExtNameByteArr, Constants.FDFS_FILE_EXT_NAME_MAX_LEN);
         }
         catch (UnsupportedEncodingException e) {
         }
