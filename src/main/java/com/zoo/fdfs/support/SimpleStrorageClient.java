@@ -1,6 +1,7 @@
 package com.zoo.fdfs.support;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,6 +28,7 @@ import com.zoo.fdfs.api.TrackerClient;
 import com.zoo.fdfs.common.Bytes;
 import com.zoo.fdfs.common.Circle;
 import com.zoo.fdfs.common.Collections;
+import com.zoo.fdfs.common.IOs;
 import com.zoo.fdfs.common.Messages;
 import com.zoo.fdfs.common.ResponseBody;
 import com.zoo.fdfs.common.Strings;
@@ -54,7 +56,7 @@ public class SimpleStrorageClient implements StorageClient {
     private SimpleConnectionPool updateConnectionPool;
 
     private byte errorNo;
-
+    
 
     public SimpleStrorageClient(TrackerClient trackerClient, FdfsClientConfig fdfsClientConfig) {
         this.fdfsClientConfig = fdfsClientConfig;
@@ -96,8 +98,7 @@ public class SimpleStrorageClient implements StorageClient {
             InetSocketAddress inetSocketAddress = addressCircle.readNext().getInetSocketAddress();
             try {
                 fetchConnectionPool.put(newConnection(inetSocketAddress));
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 logger.error("newConnection fail, inetSocketAddress=[{}]", inetSocketAddress, e);
             }
         }
@@ -126,12 +127,6 @@ public class SimpleStrorageClient implements StorageClient {
     }
 
 
-    @Override
-    public String[] uploadFile(String groupName, String localFileName, String fileExtName,
-            Map<String, String> meta) {
-        return null;
-    }
-
 
     @Override
     public String[] uploadFile(byte[] fileBuff, int offset, int length, String fileExtName,
@@ -140,12 +135,6 @@ public class SimpleStrorageClient implements StorageClient {
     }
 
 
-    @Override
-    public String[] uploadFile(String groupName, byte[] fileBuff, int offset, int length, String fileExtName,
-            Map<String, String> meta) {
-        // TODO Auto-generated method stub
-        return null;
-    }
 
 
     @Override
@@ -154,19 +143,6 @@ public class SimpleStrorageClient implements StorageClient {
         return null;
     }
 
-
-    @Override
-    public String[] uploadFile(String groupName, byte[] fileBuff, String fileExtName, Map<String, String> meta) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-
-    @Override
-    public String[] uploadFile(String groupName, long fileSize, String fileExtName, Map<String, String> meta) {
-        // TODO Auto-generated method stub
-        return null;
-    }
 
 
     @Override
@@ -178,32 +154,56 @@ public class SimpleStrorageClient implements StorageClient {
                 fileExtName = localFileName.substring(idx + 1);
             }
         }
-        boolean uploadSlave = (!Strings.isBlank(groupName)) && (!Strings.isBlank(masterFileName)) && (prefixName != null);
+        boolean uploadSlave =
+                (!Strings.isBlank(groupName)) && (!Strings.isBlank(masterFileName)) && (prefixName != null);
         byte[] fileExtNameByteArr = null;
-        //new byte[Constants.FDFS_FILE_EXT_NAME_MAX_LEN];
+        // new byte[Constants.FDFS_FILE_EXT_NAME_MAX_LEN];
         try {
             fileExtNameByteArr = localFileName.getBytes(fdfsClientConfig.getCharset());
             fileExtNameByteArr = Bytes.wrap(fileExtNameByteArr, Constants.FDFS_FILE_EXT_NAME_MAX_LEN);
-        }
-        catch (UnsupportedEncodingException e) {
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
         }
         Connection con = null;
+        byte[] sizeBytes = null;
+        long bodyLength = 0;
+        byte[] fileBuf = null;
+        FileInputStream fis = null;
+        byte[] masterFileNameLengthByteArr = new byte[8];
+        // 获取本地文件data
+        try {
+            fis = new FileInputStream(localFileName);
+            // TODO 文件太大，这里可能会有问题。
+            fileBuf = new byte[fis.available()];
+            fis.read(fileBuf);
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            IOs.close(fis);
+        }
+
         if (uploadSlave) {
             con = getUpdateableConnection(groupName, masterFileName);
             byte[] prefixNameByteArr = null;
             byte[] masterFileNameByteArr = null;
-            //new byte[Constants.FDFS_FILE_EXT_NAME_MAX_LEN];
+            // new byte[Constants.FDFS_FILE_EXT_NAME_MAX_LEN];
             try {
                 prefixNameByteArr = prefixName.getBytes(fdfsClientConfig.getCharset());
                 masterFileNameByteArr = masterFileName.getBytes(fdfsClientConfig.getCharset());
+            } catch (UnsupportedEncodingException e) {
+                e.printStackTrace();
             }
-            catch (UnsupportedEncodingException e) {
-            }
-            
-        } else {
+            sizeBytes = new byte[2 * Constants.FDFS_PROTO_PKG_LEN_SIZE];
+            bodyLength =
+                    sizeBytes.length + Constants.FDFS_FILE_PREFIX_MAX_LEN
+                            + Constants.FDFS_FILE_EXT_NAME_MAX_LEN + masterFileNameByteArr.length
+                            + fileBuf.length;
+            Bytes.long2bytes(masterFileName.length(), masterFileNameLengthByteArr);
+        }
+        else {
             con = getWriteableConnection(groupName);
         }
-        
+
         return null;
     }
 
@@ -224,13 +224,6 @@ public class SimpleStrorageClient implements StorageClient {
     }
 
 
-    @Override
-    public String[] uploadFile(String groupName, String masterFileName, String prefixName, long fileSize,
-            String fileExtName, Map<String, String> meta) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
 
     @Override
     public String[] uploadAppenderFile(String localFileName, String fileExtName, Map<String, String> meta) {
@@ -247,12 +240,6 @@ public class SimpleStrorageClient implements StorageClient {
     }
 
 
-    @Override
-    public String[] uploadAppenderFile(String groupName, byte[] fileBuff, int offset, int length,
-            String fileExtName, Map<String, String> meta) {
-        // TODO Auto-generated method stub
-        return null;
-    }
 
 
     @Override
@@ -262,20 +249,6 @@ public class SimpleStrorageClient implements StorageClient {
     }
 
 
-    @Override
-    public String[] uploadAppenderFile(String groupName, byte[] fileBuff, String fileExtName,
-            Map<String, String> meta) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-
-    @Override
-    public String[] uploadAppenderFile(String groupName, long fileSize, String fileExtName,
-            Map<String, String> meta) {
-        // TODO Auto-generated method stub
-        return null;
-    }
 
 
     @Override
@@ -292,19 +265,6 @@ public class SimpleStrorageClient implements StorageClient {
     }
 
 
-    @Override
-    public int append_file(String group_name, String appender_filename, byte[] file_buff, int offset,
-            int length) {
-        // TODO Auto-generated method stub
-        return 0;
-    }
-
-
-    @Override
-    public int appendFile(String groupName, String appenderFileName, long fileSize) {
-        // TODO Auto-generated method stub
-        return 0;
-    }
 
 
     @Override
@@ -329,11 +289,6 @@ public class SimpleStrorageClient implements StorageClient {
     }
 
 
-    @Override
-    public int modifyFile(String groupName, String appenderFileName, long fileOffset, long modifySize) {
-        // TODO Auto-generated method stub
-        return 0;
-    }
 
 
     @Override
@@ -381,12 +336,10 @@ public class SimpleStrorageClient implements StorageClient {
             }
             byte[] body = responseBody.getBody();
             return body;
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             logger.error("downloadFile(String, String, long, long) fail");
             logger.error(e.getMessage(), e);
-        }
-        finally {
+        } finally {
             closeSocket(con, is, os);
         }
         return null;
@@ -400,27 +353,6 @@ public class SimpleStrorageClient implements StorageClient {
         return 0;
     }
 
-
-    @Override
-    public int downloadFile(String groupName, String remoteFileName, long fileOffset, long downloadBytes,
-            String localFileName) {
-        byte[] data = downloadFile(groupName, remoteFileName, fileOffset, downloadBytes);
-        writeLocalFile(data, localFileName);
-        return 0;
-    }
-
-
-    @Override
-    public int downloadFileResult(String groupName, String remoteFileName) {
-        return 0;
-    }
-
-
-    @Override
-    public int downloadFileResult(String groupName, String remoteFilename, long fileOffset, long downloadBytes) {
-        // TODO Auto-generated method stub
-        return 0;
-    }
 
 
     @Override
@@ -459,8 +391,7 @@ public class SimpleStrorageClient implements StorageClient {
         try {
             groupNameByteArr = groupName.getBytes(fdfsClientConfig.getCharset());
             remoteFileNameByteArr = remoteFileName.getBytes(fdfsClientConfig.getCharset());
-        }
-        catch (UnsupportedEncodingException e) {
+        } catch (UnsupportedEncodingException e) {
             e.printStackTrace();
         }
         byte errorNo = 0;
@@ -502,8 +433,7 @@ public class SimpleStrorageClient implements StorageClient {
             if (con != null) {
                 con.close();
             }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -514,16 +444,13 @@ public class SimpleStrorageClient implements StorageClient {
         try {
             fos = new FileOutputStream(localFileName);
             fos.write(data);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             logger.error("downloadFile(String, String, String)");
             logger.error(e.getMessage(), e);
-        }
-        finally {
+        } finally {
             try {
                 fos.close();
-            }
-            catch (IOException e) {
+            } catch (IOException e) {
             }
         }
     }

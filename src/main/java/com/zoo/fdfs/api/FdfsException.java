@@ -5,7 +5,7 @@ package com.zoo.fdfs.api;
  * @author yankai913@gmail.com
  * @date 2014-3-17
  */
-public class FdfsException extends RuntimeException {
+public class FdfsException extends Exception {
 
     private static final long serialVersionUID = -3231136192714616972L;
 

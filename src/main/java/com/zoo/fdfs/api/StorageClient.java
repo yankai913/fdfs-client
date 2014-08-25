@@ -83,7 +83,7 @@ public interface StorageClient {
 
 
     public int downloadFile(String groupName, String remoteFileName, DownloadCallback callback);
-    public int downloadFile(String groupName, String remoteFilename, DownloadCallback callback, long fileOffset, long downloadBytes);
+    public int downloadFile(String groupName, String remoteFileName, DownloadCallback callback, long fileOffset, long downloadBytes);
 
 
     public Map<String, String> getMetadata(String groupName, String remoteFileName);

@@ -1,8 +1,12 @@
 package com.zoo.fdfs.common;
 
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+
+import com.zoo.fdfs.api.FdfsException;
 
 
 /**
@@ -40,23 +44,34 @@ public class IOs {
     }
 
 
-    public static byte[] getFileData(String localFileName) {
-        if (Strings.isBlank(localFileName)) {
-            return null;
-        }
+    public static byte[] getFileData(String localFileName) throws FdfsException {
         FileInputStream fis = null;
-        byte[] data = null;
         try {
-
             fis = new FileInputStream(localFileName);
-            data = new byte[fis.available()];
+            byte[] data = new byte[fis.available()];
             fis.read(data);
+            return data;
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new FdfsException(e.getMessage(), e);
         } finally {
             close(fis);
         }
-        return data;
     }
 
+
+    public static void writeToLocalFile(byte[] srcData, String localFileName) throws FdfsException {
+        FileOutputStream fos = null;
+        try {
+            fos = new FileOutputStream(localFileName);
+            fos.write(srcData);
+        } catch (Exception e) {
+            throw new FdfsException(e.getMessage(), e);
+        } finally {
+            try {
+                fos.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 }

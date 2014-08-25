@@ -1,5 +1,6 @@
 package com.zoo.fdfs.support;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -26,16 +27,11 @@ public class SimpleConnection implements Connection {
     private long lastWriteTimestamp;
 
 
-    public SimpleConnection(int readTimeout) {
+    public SimpleConnection(int readTimeout) throws SocketException {
         this.socket = new Socket();
-        try {
-            this.socket.setSoTimeout(readTimeout);
-            this.socket.setSendBufferSize(64 * 1024);
-            this.socket.setReceiveBufferSize(64 * 1024);
-        }
-        catch (SocketException e) {
-            e.printStackTrace();
-        }
+        this.socket.setSoTimeout(readTimeout);
+        this.socket.setSendBufferSize(64 * 1024);
+        this.socket.setReceiveBufferSize(64 * 1024);
     }
 
 
@@ -46,7 +42,7 @@ public class SimpleConnection implements Connection {
 
 
     @Override
-    public void connect(InetSocketAddress inetSocketAddress, int readTimeout) throws Exception {
+    public void connect(InetSocketAddress inetSocketAddress, int readTimeout) throws IOException {
         this.inetSocketAddress = inetSocketAddress;
         this.socket.connect(getRemoteAddress(), readTimeout);
     }
@@ -59,7 +55,7 @@ public class SimpleConnection implements Connection {
 
 
     @Override
-    public byte[] read() throws Exception {
+    public byte[] read() throws IOException {
         this.lastReadTimestamp = System.currentTimeMillis();
         InputStream is = this.socket.getInputStream();
         int available = is.available();
@@ -70,7 +66,7 @@ public class SimpleConnection implements Connection {
 
 
     @Override
-    public void writeBytes(byte[] data) throws Exception {
+    public void writeBytes(byte[] data) throws IOException {
         this.lastWriteTimestamp = System.currentTimeMillis();
         OutputStream os = this.socket.getOutputStream();
         os.write(data);
@@ -78,9 +74,13 @@ public class SimpleConnection implements Connection {
 
 
     @Override
-    public void close() throws Exception {
-        if (this.socket != null && !this.socket.isClosed()) {
-            this.socket.close();
+    public void close() {
+        try {
+            if (this.socket != null && !this.socket.isClosed()) {
+                this.socket.close();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -98,13 +98,13 @@ public class SimpleConnection implements Connection {
 
 
     @Override
-    public InputStream getInputStream() throws Exception {
+    public InputStream getInputStream() throws IOException {
         return this.socket.getInputStream();
     }
 
 
     @Override
-    public OutputStream getOutputStream() throws Exception {
+    public OutputStream getOutputStream() throws IOException {
         return this.socket.getOutputStream();
     }
 }

@@ -20,4 +20,16 @@ public class Strings {
         return true;
     }
 
+
+    public static byte[] getBytes(String str, String charsetName) {
+        if (isBlank(str)) {
+            return null;
+        }
+        try {
+            return str.getBytes(charsetName);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
 }

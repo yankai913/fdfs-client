@@ -1,5 +1,6 @@
 package com.zoo.fdfs.api;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -15,19 +16,19 @@ public interface Connection {
     InetSocketAddress getRemoteAddress();
 
 
-    void connect(InetSocketAddress inetSocketAddress, int connectTimeout) throws Exception;// timeout是毫秒
+    void connect(InetSocketAddress inetSocketAddress, int connectTimeout) throws IOException;// timeout是毫秒
 
 
     boolean isConnected();
 
 
-    byte[] read() throws Exception;
+    byte[] read() throws IOException;
 
 
-    void writeBytes(byte[] data) throws Exception;
+    void writeBytes(byte[] data) throws IOException;
 
 
-    void close() throws Exception;
+    void close();
 
 
     long getReadTimestamp();
@@ -36,8 +37,8 @@ public interface Connection {
     long getWriteTimestamp();
 
 
-    InputStream getInputStream() throws Exception;
+    InputStream getInputStream() throws IOException;
 
 
-    OutputStream getOutputStream() throws Exception;
+    OutputStream getOutputStream() throws IOException;
 }

@@ -1,4 +1,4 @@
-package com.zoo.fdfs.support;
+package com.zoo.fdfs.support.callback;
 
 import java.io.IOException;
 import java.io.OutputStream;
