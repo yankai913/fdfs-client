@@ -77,7 +77,7 @@ public final class SimpleConnectionPool {
     }
 
 
-    public boolean isEnough() {
+    public boolean isFull() {
         return getRealElementLength() == getElementLength();
     }
 }

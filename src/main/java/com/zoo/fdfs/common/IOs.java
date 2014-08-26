@@ -1,5 +1,6 @@
 package com.zoo.fdfs.common;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -55,6 +56,33 @@ public class IOs {
             throw new FdfsException(e.getMessage(), e);
         } finally {
             close(fis);
+        }
+    }
+
+
+    public static FileInputStream getFileInputStream(String localFileName) throws FdfsException {
+        try {
+            return new FileInputStream(localFileName);
+        } catch (Exception e) {
+            throw new FdfsException(e.getMessage(), e);
+        }
+    }
+
+
+    public static File getFile(String localFileName) throws FdfsException {
+        try {
+            return new File(localFileName);
+        } catch (Exception e) {
+            throw new FdfsException(e.getMessage(), e);
+        }
+    }
+
+
+    public static FileInputStream getFileInputStream(File file) throws FdfsException {
+        try {
+            return new FileInputStream(file);
+        } catch (Exception e) {
+            throw new FdfsException(e.getMessage(), e);
         }
     }
 

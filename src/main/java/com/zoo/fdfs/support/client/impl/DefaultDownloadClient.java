@@ -38,9 +38,21 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
 
     private static final Logger logger = LoggerFactory.getLogger(DefaultDownloadClient.class);
 
+    private SimpleConnectionPool readableConnectionPool;
+
 
     public DefaultDownloadClient(FdfsClientConfig fdfsClientConfig, TrackerClient trackerClient) {
         super(fdfsClientConfig, trackerClient);
+    }
+
+
+    private void setReadableConnectionPool(SimpleConnectionPool readableConnectionPool) {
+        this.readableConnectionPool = readableConnectionPool;
+    }
+
+
+    private SimpleConnectionPool getReadableConnectionPool() {
+        return readableConnectionPool;
     }
 
 
@@ -163,8 +175,8 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
 
 
     private void checkBeforeDownload(String groupName, String remoteFileName) {
-        Asserts.assertStringBlank(groupName, "groupName is blank");
-        Asserts.assertStringBlank(remoteFileName, "remoteFileName is blank");
+        Asserts.assertStringIsBlank(groupName, "groupName is blank");
+        Asserts.assertStringIsBlank(remoteFileName, "remoteFileName is blank");
         // log
         logger.debug("groupName=[{}]", groupName);
         logger.debug("remoteFileName=[{}]", remoteFileName);
@@ -172,37 +184,43 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
 
 
     private Connection getFetchableConnection(String groupName, String remoteFileName) throws FdfsException {
-        logger.debug("open connection...");
-        // 拿StorageIP
-        Set<StorageConfig> storageConfigSet = getTrackerClient().getFetchStorageSet(groupName, remoteFileName);
+        if (getReadableConnectionPool() == null) {
 
-        Asserts.assertCollectionBlank(storageConfigSet, "storageConfigSet is empty");
+            logger.debug("start getReadableConnectionPool...");
 
-        Circle<StorageConfig> addressCircle = new Circle<StorageConfig>(storageConfigSet);
+            Set<StorageConfig> storageConfigSet = getTrackerClient().getFetchStorageSet(groupName, remoteFileName);
 
-        final SimpleConnectionPool fetchConnectionPool = new SimpleConnectionPool(getFdfsClientConfig().getFetchPoolSize());
+            Asserts.assertCollectionIsBlank(storageConfigSet, "storageConfigSet is empty");
 
-        for (int i = 0; i <= fetchConnectionPool.getElementLength(); i++) {
-            InetSocketAddress inetSocketAddress = addressCircle.readNext().getInetSocketAddress();
-            try {
-                fetchConnectionPool.put(super.newConnection(inetSocketAddress));
-            } catch (Exception e) {//跳过异常，后面检查。
-                logger.error("newConnection fail, inetSocketAddress=[{}]", inetSocketAddress, e);
+            Circle<StorageConfig> addressCircle = new Circle<StorageConfig>(storageConfigSet);
+
+            final SimpleConnectionPool connectionPool = new SimpleConnectionPool(getFdfsClientConfig().getFetchPoolSize());
+
+            for (int i = 0; i <= connectionPool.getElementLength(); i++) {
+                StorageConfig storageConfig = addressCircle.readNext();
+                InetSocketAddress inetSocketAddress = storageConfig.getInetSocketAddress();
+                byte storePathIndex = storageConfig.getStorePathIndex();
+                try {
+                    Connection con = super.newConnection(inetSocketAddress);
+                    con.setStorePathIndex(storePathIndex);
+                    connectionPool.put(con);
+                } catch (Exception e) {// 跳过异常，后面检查。
+                    logger.error("newConnection fail, inetSocketAddress=[{}]", inetSocketAddress, e);
+                }
             }
+
+            if (!connectionPool.isFull()) {
+                throw new FdfsException("init fetchConnectionPool fail...");
+            }
+
+            setReadableConnectionPool(connectionPool);
         }
 
-        // 真实初始化的个数和配置的个数不一致。
-        if (fetchConnectionPool.isEnough()) {
-            throw new FdfsException("init fetchConnectionPool fail...");
-        }
-        // 赋值
-        super.setConnectionPool(fetchConnectionPool);
-
-        return fetchConnectionPool.get();
+        return getReadableConnectionPool().get();
     }
 
 
-    private void sendDownloadRequest(OutputStream os, String groupName, String remoteFileName, long fileOffset, long downloadBytes) throws IOException {
+    private void sendDownloadRequest(OutputStream os, String groupName, String remoteFileName, long fileOffset, long downloadBytes) throws IOException, FdfsException {
 
         byte[] groupNameByteArr = Strings.getBytes(groupName, getFdfsClientConfig().getCharset());
         byte[] remoteFileNameByteArr = Strings.getBytes(remoteFileName, getFdfsClientConfig().getCharset());

@@ -87,7 +87,7 @@ public interface StorageClient {
 
 
     public Map<String, String> getMetadata(String groupName, String remoteFileName);
-    public int setMetadataResult(String groupName, String remoteFileName, Map<String, String> meta, byte opFlag);
+    public int setMetadata(String groupName, String remoteFileName, Map<String, String> meta, byte opFlag);
             
 
     public FileInfo getFileInfo(String groupName, String remoteFileName);

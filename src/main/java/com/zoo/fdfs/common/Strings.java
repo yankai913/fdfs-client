@@ -1,5 +1,8 @@
 package com.zoo.fdfs.common;
 
+import com.zoo.fdfs.api.FdfsException;
+
+
 /**
  * 
  * @author yankai913@gmail.com
@@ -21,15 +24,31 @@ public class Strings {
     }
 
 
-    public static byte[] getBytes(String str, String charsetName) {
+    public static byte[] getBytes(String str, String charsetName) throws FdfsException {
         if (isBlank(str)) {
             return null;
         }
         try {
             return str.getBytes(charsetName);
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new FdfsException(e.getMessage(), e);
         }
-        return null;
+    }
+
+
+    public static boolean isNotBlank(String str) {
+        return !isBlank(str);
+    }
+
+
+    public static String format(String msg, Object... args) {
+        int idx = msg.indexOf("{}");
+        int j = 0;
+        while (idx >= 0) {
+            msg = msg.substring(0, idx) + args[j] + msg.substring(idx + 2);
+            j = j + 1;
+            idx = msg.indexOf("{}");
+        }
+        return msg;
     }
 }

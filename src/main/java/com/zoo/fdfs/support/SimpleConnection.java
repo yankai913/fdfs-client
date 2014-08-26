@@ -26,10 +26,12 @@ public class SimpleConnection implements Connection {
 
     private long lastWriteTimestamp;
 
+    private byte storePathIndex;
+
 
     public SimpleConnection(int readTimeout) throws SocketException {
         this.socket = new Socket();
-        this.socket.setSoTimeout(readTimeout);
+        this.socket.setSoTimeout(readTimeout);// milliseconds
         this.socket.setSendBufferSize(64 * 1024);
         this.socket.setReceiveBufferSize(64 * 1024);
     }
@@ -42,9 +44,9 @@ public class SimpleConnection implements Connection {
 
 
     @Override
-    public void connect(InetSocketAddress inetSocketAddress, int readTimeout) throws IOException {
+    public void connect(InetSocketAddress inetSocketAddress, int connectTimeout) throws IOException {
         this.inetSocketAddress = inetSocketAddress;
-        this.socket.connect(getRemoteAddress(), readTimeout);
+        this.socket.connect(getRemoteAddress(), connectTimeout);// milliseconds
     }
 
 
@@ -106,5 +108,17 @@ public class SimpleConnection implements Connection {
     @Override
     public OutputStream getOutputStream() throws IOException {
         return this.socket.getOutputStream();
+    }
+
+
+    @Override
+    public byte getStorePathIndex() {
+        return this.storePathIndex;
+    }
+
+
+    @Override
+    public void setStorePathIndex(byte storePathIndex) {
+        this.storePathIndex = storePathIndex;
     }
 }

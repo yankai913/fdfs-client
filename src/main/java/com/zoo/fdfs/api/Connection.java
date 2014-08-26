@@ -41,4 +41,10 @@ public interface Connection {
 
 
     OutputStream getOutputStream() throws IOException;
+
+
+    byte getStorePathIndex();
+
+
+    void setStorePathIndex(byte storePathIndex);
 }
