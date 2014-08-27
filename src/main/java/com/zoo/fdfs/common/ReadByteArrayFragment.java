@@ -53,6 +53,7 @@ public final class ReadByteArrayFragment {
         t = t + ((data[readIndex + 2] & 0xFF) << 40);
         t = t + ((data[readIndex + 1] & 0xFF) << 48);
         t = t + ((data[readIndex + 0] & 0xFF) << 56);
+        readIndex = readIndex + 8;
         return t;
     }
 
@@ -64,6 +65,7 @@ public final class ReadByteArrayFragment {
         t = t + ((data[readIndex + 2] & 0xFF) << 8);
         t = t + ((data[readIndex + 1] & 0xFF) << 16);
         t = t + ((data[readIndex + 0] & 0xFF) << 24);
+        readIndex = readIndex + 4;
         return t;
     }
 
@@ -75,6 +77,13 @@ public final class ReadByteArrayFragment {
         return str;
     }
 
+    public String readString(int length) {
+        checkSize(length);
+        String str = new String(data, readIndex, length);
+        readIndex = readIndex + length;
+        return str;
+    }
+    
 
     public void skip(int offset) {
         readIndex = readIndex + offset;

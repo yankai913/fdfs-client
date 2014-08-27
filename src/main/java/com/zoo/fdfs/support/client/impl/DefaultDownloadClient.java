@@ -246,7 +246,7 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
         {
             request.writeLong(fileOffset);
             request.writeLong(downloadBytes);
-            request.writeSubBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
+            request.writeLimitedBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
             request.writeBytes(remoteFileNameByteArr);
         }
         os.write(request.getData());

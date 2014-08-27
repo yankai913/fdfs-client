@@ -18,8 +18,7 @@ import com.zoo.fdfs.api.Constants;
  */
 public class Messages {
 
-    public static byte[] createRequest(String groupName, String fileName, String charsetName, byte cmd,
-            byte errorNo) throws Exception {
+    public static byte[] createRequest(String groupName, String fileName, String charsetName, byte cmd, byte errorNo) throws Exception {
         byte[] groupNameByteArr = groupName.getBytes(charsetName);
         byte[] fileNameByteArr = fileName.getBytes(charsetName);
 
@@ -45,7 +44,7 @@ public class Messages {
         }
         // 填充body
         {
-            request.writeSubBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
+            request.writeLimitedBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
             request.writeBytes(fileNameByteArr);
         }
         return request.getData();
@@ -76,12 +75,10 @@ public class Messages {
         int readBodyLength = is.read(body);
         // 验证body读完整。
         if (bodyLength != readBodyLength) {
-            throw new IllegalStateException("invalid read body , bodyLength: " + bodyLength
-                    + ", readBodyLength: " + readBodyLength);
+            throw new IllegalStateException("invalid read body , bodyLength: " + bodyLength + ", readBodyLength: " + readBodyLength);
         }
         if (expectBodyLenth > 0 && readBodyLength != expectBodyLenth) {
-            throw new IllegalStateException("readBodyLength:" + readBodyLength + ", expectBodyLenth:"
-                    + expectBodyLenth);
+            throw new IllegalStateException("readBodyLength:" + readBodyLength + ", expectBodyLenth:" + expectBodyLenth);
         }
         return new ResponseBody(respHeader[9], body);
     }
@@ -96,9 +93,18 @@ public class Messages {
     }
 
 
+    public static byte[] createHeader(long bodyLength, byte cmd) {
+        WriteByteArrayFragment header = new WriteByteArrayFragment(10);
+        header.writeLong(bodyLength);
+        header.writeByte(cmd);
+        byte errorNo = 0;
+        header.writeByte(errorNo);
+        return header.getData();
+    }
+
+
     @SuppressWarnings("unchecked")
-    public static <T extends BaseStat> T[] decode(byte[] bodyBytes, Class<T> clazz, int fieldsTotalSize,
-            String charset) {
+    public static <T extends BaseStat> T[] decode(byte[] bodyBytes, Class<T> clazz, int fieldsTotalSize, String charset) {
         if (bodyBytes.length % fieldsTotalSize != 0) {
             throw new IllegalStateException("invalid bodyBytes.length, bodyBytes.length=" + bodyBytes.length);
         }
@@ -111,14 +117,14 @@ public class Messages {
                 results[i] = constructor.newInstance(charset);
                 results[i].setFields(bodyBytes, offset);
                 offset += fieldsTotalSize;
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }
         return results;
     }
-    
+
+
     public static ResponseBody readStorageResponse(InputStream is, int expectBodyLenth) throws Exception {
         byte[] respHeader = new byte[10];
         int length = is.read(respHeader);
@@ -143,12 +149,10 @@ public class Messages {
         int readBodyLength = is.read(body);
         // 验证body读完整。
         if (bodyLength != readBodyLength) {
-            throw new IllegalStateException("invalid read body , bodyLength: " + bodyLength
-                    + ", readBodyLength: " + readBodyLength);
+            throw new IllegalStateException("invalid read body , bodyLength: " + bodyLength + ", readBodyLength: " + readBodyLength);
         }
         if (expectBodyLenth > 0 && readBodyLength != expectBodyLenth) {
-            throw new IllegalStateException("readBodyLength:" + readBodyLength + ", expectBodyLenth:"
-                    + expectBodyLenth);
+            throw new IllegalStateException("readBodyLength:" + readBodyLength + ", expectBodyLenth:" + expectBodyLenth);
         }
         return new ResponseBody(respHeader[9], body);
     }

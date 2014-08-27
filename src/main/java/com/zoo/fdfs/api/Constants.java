@@ -5,7 +5,7 @@ package com.zoo.fdfs.api;
  * @author yankai913@gmail.com
  * @date 2014-3-17
  */
-public class Constants {
+public interface Constants {
 
     public static final byte FDFS_PROTO_CMD_QUIT = 82;
     public static final byte TRACKER_PROTO_CMD_SERVER_LIST_GROUP = 91;

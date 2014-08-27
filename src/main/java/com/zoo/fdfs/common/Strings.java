@@ -51,4 +51,24 @@ public class Strings {
         }
         return msg;
     }
+
+
+    public static byte[] getLimitBytes(String str, String charsetName, int limitLength) throws FdfsException {
+        if (isBlank(str)) {
+            return null;
+        }
+        try {
+            byte[] src = str.getBytes(charsetName);
+            if (src.length == limitLength) {
+                return src;
+            }
+            byte[] result = new byte[limitLength];
+            int minLength = Math.min(src.length, limitLength);
+            System.arraycopy(src, 0, result, 0, minLength);
+            return result;
+        } catch (Exception e) {
+            throw new FdfsException(e.getMessage(), e);
+        }
+    }
+
 }

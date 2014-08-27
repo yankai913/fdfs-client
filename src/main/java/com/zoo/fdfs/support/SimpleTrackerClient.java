@@ -7,10 +7,13 @@ import java.net.Socket;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import com.zoo.fdfs.api.Constants;
 import com.zoo.fdfs.api.FdfsClientConfig;
+import com.zoo.fdfs.api.FdfsException;
 import com.zoo.fdfs.api.GroupStat;
 import com.zoo.fdfs.api.StorageConfig;
 import com.zoo.fdfs.api.StorageStat;
@@ -21,6 +24,7 @@ import com.zoo.fdfs.common.ReadByteArrayFragment;
 import com.zoo.fdfs.common.ResponseBody;
 import com.zoo.fdfs.common.Strings;
 import com.zoo.fdfs.common.WriteByteArrayFragment;
+import com.zoo.fdfs.support.client.impl.AbstractClient;
 
 
 /**
@@ -33,16 +37,14 @@ public class SimpleTrackerClient implements TrackerClient {
 
     private static final Logger logger = LoggerFactory.getLogger(SimpleTrackerClient.class);
 
-    private FdfsClientConfig fdfsClientConfigurable;
+    private FdfsClientConfig fdfsClientConfig;
 
     private TrackerGroup trackerGroup;
 
-    private byte errorNo;
 
-
-    public SimpleTrackerClient(FdfsClientConfig fdfsClientConfigurable) {
-        this.fdfsClientConfigurable = fdfsClientConfigurable;
-        this.trackerGroup = new TrackerGroup(this.fdfsClientConfigurable);
+    public SimpleTrackerClient(FdfsClientConfig fdfsClientConfig) {
+        this.fdfsClientConfig = fdfsClientConfig;
+        this.trackerGroup = new TrackerGroup(this.fdfsClientConfig);
     }
 
 
@@ -52,13 +54,13 @@ public class SimpleTrackerClient implements TrackerClient {
     }
 
 
-    private void sendGetStoreStorageRequest(OutputStream os, byte cmd, String groupName) throws Exception {
+    private byte[] buildGetStoreStorageRequest(byte cmd, String groupName) throws FdfsException {
         byte[] groupNameByteArr = null;
         byte errorNo = 0;
         int bodyLength = 0;
-        if (!Strings.isBlank(groupName)) {
-            bodyLength = Constants.FDFS_GROUP_NAME_MAX_LEN;
-            groupNameByteArr = groupName.getBytes(fdfsClientConfigurable.getCharset());
+        if (Strings.isNotBlank(groupName)) {
+            bodyLength = FDFS_GROUP_NAME_MAX_LEN;
+            groupNameByteArr = Strings.getBytes(groupName, fdfsClientConfig.getCharset());
         }
         int headerLenght = 10;
         int totalLength = headerLenght + bodyLength;
@@ -71,12 +73,11 @@ public class SimpleTrackerClient implements TrackerClient {
         }
         // writeBody
         {
-            if (!Strings.isBlank(groupName)) {
-                request.writeSubBytes(groupNameByteArr, Constants.FDFS_GROUP_NAME_MAX_LEN);
+            if (Strings.isNotBlank(groupName)) {
+                request.writeLimitedBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
             }
         }
-        // write
-        os.write(request.getData());
+        return request.getData();
     }
 
 
@@ -100,15 +101,14 @@ public class SimpleTrackerClient implements TrackerClient {
             if (socket != null) {
                 socket.close();
             }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
 
     @Override
-    public StorageConfig getStoreStorageOne(String groupName) {
+    public StorageConfig getStoreStorageOne(String groupName) throws FdfsException {
         Socket socket = getSocket();
         InputStream is = null;
         OutputStream os = null;
@@ -117,46 +117,42 @@ public class SimpleTrackerClient implements TrackerClient {
             is = socket.getInputStream();
             byte cmd = 0;
             if (Strings.isBlank(groupName)) {
-                cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ONE;
+                cmd = TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ONE;
             }
             else {
-                cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITH_GROUP_ONE;
+                cmd = TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITH_GROUP_ONE;
             }
-            sendGetStoreStorageRequest(os, cmd, groupName);
-            ResponseBody responseBody =
-                    Messages.readResponse(is, Constants.TRACKER_QUERY_STORAGE_STORE_BODY_LEN);
-            this.errorNo = responseBody.getErrorNo();
-            if (this.errorNo != 0) {
+            byte[] request = buildGetStoreStorageRequest(cmd, groupName);
+            os.write(request);
+            // recv
+            ResponseBody responseBody = Messages.readResponse(is, TRACKER_QUERY_STORAGE_STORE_BODY_LEN);
+            byte errorNo = responseBody.getErrorNo();
+            if (errorNo != 0) {
                 return null;
             }
             byte[] body = responseBody.getBody();
-            ReadByteArrayFragment readByteArrayFragment = new ReadByteArrayFragment(body);
-            String addr =
-                    readByteArrayFragment.readString(Constants.FDFS_GROUP_NAME_MAX_LEN,
-                        Constants.FDFS_IPADDR_SIZE - 1).trim();
-            long port = readByteArrayFragment.readLong();
-            byte storePathIndex = readByteArrayFragment.readByte();
+            ReadByteArrayFragment response = new ReadByteArrayFragment(body);
+            String addr = response.readString(FDFS_GROUP_NAME_MAX_LEN, FDFS_IPADDR_SIZE - 1).trim();
+            long port = response.readLong();
+            byte storePathIndex = response.readByte();
             InetSocketAddress inetSocketAddress = new InetSocketAddress(addr, (int) port);
             StorageConfig storageConfig = new StorageConfig();
             storageConfig.setInetSocketAddress(inetSocketAddress);
             storageConfig.setStorePathIndex(storePathIndex);
             return storageConfig;
-        }
-        catch (Exception e) {
-            logger.error("getStoreStorageOne fail, socket: " + socket);
-            logger.error(e.getMessage(), e);
-        }
-        finally {
+        } catch (Exception e) {
+            String msg = "getStoreStorageOne fail, groupName=[{}], socket=[{}]";
+            msg = Strings.format(msg, groupName, socket);
+            throw new FdfsException(msg + e.getMessage(), e);
+        } finally {
             closeSocket(socket, is, os);
         }
-        return null;
     }
 
 
     @Override
-    public Set<StorageConfig> getStoreStorageSet(String groupName) {
+    public Set<StorageConfig> getStoreStorageSet(String groupName) throws FdfsException {
         Socket socket = getSocket();
-        Set<StorageConfig> set = new HashSet<StorageConfig>();
         InputStream is = null;
         OutputStream os = null;
         try {
@@ -164,60 +160,61 @@ public class SimpleTrackerClient implements TrackerClient {
             is = socket.getInputStream();
             byte cmd = 0;
             if (Strings.isBlank(groupName)) {
-                cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ALL;
+                cmd = TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ALL;
             }
             else {
-                cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITH_GROUP_ALL;
+                cmd = TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITH_GROUP_ALL;
             }
-            sendGetStoreStorageRequest(os, cmd, groupName);
-            ResponseBody responseBody = Messages.readResponse(is, -1);// -1跳过header检查异常
-            this.errorNo = responseBody.getErrorNo();
-            if (this.errorNo != 0) {
+            byte[] request = buildGetStoreStorageRequest(cmd, groupName);
+            os.write(request);
+            // -1 jump over header check
+            ResponseBody responseBody = Messages.readResponse(is, -1);
+            byte errorNo = responseBody.getErrorNo();
+            if (errorNo != 0) {
                 return null;
             }
             byte[] body = responseBody.getBody();
-            if (body.length < Constants.TRACKER_QUERY_STORAGE_STORE_BODY_LEN) {
-                throw new IllegalStateException("invalid body.length, errorCode: " + Constants.ERR_NO_EINVAL);
+            if (body.length < TRACKER_QUERY_STORAGE_STORE_BODY_LEN) {
+                throw new IllegalStateException("invalid body.length, errorCode: " + ERR_NO_EINVAL);
             }
-            int ipPortLength = body.length - (Constants.FDFS_GROUP_NAME_MAX_LEN + 1);
-            int recordLength = Constants.FDFS_IPADDR_SIZE - 1 + Constants.FDFS_PROTO_PKG_LEN_SIZE;
+            int ipPortLength = body.length - (FDFS_GROUP_NAME_MAX_LEN + 1);
+            int recordLength = FDFS_IPADDR_SIZE - 1 + FDFS_PROTO_PKG_LEN_SIZE;
             if (ipPortLength % recordLength != 0) {
-                throw new IllegalStateException("invalid body.length, errorCode: " + Constants.ERR_NO_EINVAL);
+                throw new IllegalStateException("invalid body.length, errorCode: " + ERR_NO_EINVAL);
             }
             int serverCount = ipPortLength / recordLength;
             if (serverCount > 16) {
-                throw new IllegalStateException("invalid body.length, errorCode: " + Constants.ERR_NO_ENOSPC);
+                throw new IllegalStateException("invalid body.length, errorCode: " + ERR_NO_ENOSPC);
             }
             byte storePathIndex = body[body.length - 1];
-            ReadByteArrayFragment readByteArrayFragment = new ReadByteArrayFragment(body);
-            readByteArrayFragment.skip(Constants.FDFS_GROUP_NAME_MAX_LEN);
+            ReadByteArrayFragment response = new ReadByteArrayFragment(body);
+            response.skip(FDFS_GROUP_NAME_MAX_LEN);
+            Set<StorageConfig> set = new HashSet<StorageConfig>();
             for (int i = 0; i < serverCount; i++) {
-                String addr = readByteArrayFragment.readString(0, Constants.FDFS_IPADDR_SIZE - 1).trim();
-                long port = readByteArrayFragment.readLong();
+                String addr = response.readString(0, FDFS_IPADDR_SIZE - 1).trim();
+                long port = response.readLong();
                 InetSocketAddress inetSocketAddress = new InetSocketAddress(addr, (int) port);
                 StorageConfig storageConfig = new StorageConfig();
                 storageConfig.setInetSocketAddress(inetSocketAddress);
                 storageConfig.setStorePathIndex(storePathIndex);
                 set.add(storageConfig);
             }
-        }
-        catch (Exception e) {
-            logger.error("getStoreStorageOne fail, socket: " + socket);
-            logger.error(e.getMessage(), e);
-        }
-        finally {
+            return set;
+        } catch (Exception e) {
+            String msg = "getStoreStorageSet fail, groupName=[{}], socket=[{}]";
+            msg = Strings.format(msg, groupName, socket);
+            throw new FdfsException(msg + e.getMessage(), e);
+        } finally {
             closeSocket(socket, is, os);
         }
-        return set;
     }
 
 
-    private void sendGetFetchStorageRequest(OutputStream os, byte cmd, String groupName, String fileName)
-            throws Exception {
-        byte[] groupNameByteArr = groupName.getBytes(fdfsClientConfigurable.getCharset());
-        byte[] fileNameByteArr = fileName.getBytes(fdfsClientConfigurable.getCharset());
+    private byte[] buildGetFetchStorageRequest(byte cmd, String groupName, String fileName) throws Exception {
+        byte[] groupNameByteArr = groupName.getBytes(fdfsClientConfig.getCharset());
+        byte[] fileNameByteArr = fileName.getBytes(fdfsClientConfig.getCharset());
         byte errorNo = 0;
-        int bodyLength = Constants.FDFS_GROUP_NAME_MAX_LEN + fileNameByteArr.length;
+        int bodyLength = FDFS_GROUP_NAME_MAX_LEN + fileNameByteArr.length;
         int totalLength = 10 + bodyLength;
         WriteByteArrayFragment request = new WriteByteArrayFragment(totalLength);
         // writeHeader
@@ -228,16 +225,14 @@ public class SimpleTrackerClient implements TrackerClient {
         }
         // writeBody
         {
-            request.writeSubBytes(groupNameByteArr, Constants.FDFS_GROUP_NAME_MAX_LEN);
+            request.writeLimitedBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
             request.writeBytes(fileNameByteArr);
         }
-        // write
-        os.write(request.getData());
-
+        return request.getData();
     }
 
 
-    public StorageConfig getFetchStorageOne(String groupName, String fileName) {
+    public StorageConfig getFetchStorageOne(String groupName, String fileName) throws FdfsException {
         Set<StorageConfig> set = getFetchStorageSet(groupName, fileName);
         if (set != null && set.size() > 0) {
             Iterator<StorageConfig> ite = set.iterator();
@@ -247,65 +242,57 @@ public class SimpleTrackerClient implements TrackerClient {
     }
 
 
-    private Set<StorageConfig> getFetchStorageSet(byte cmd, String groupName, String fileName) {
+    private Set<StorageConfig> getFetchStorageSet(byte cmd, String groupName, String fileName)
+            throws FdfsException {
         Socket socket = getSocket();
-        Set<StorageConfig> set = new HashSet<StorageConfig>();
         InputStream is = null;
         OutputStream os = null;
         try {
             os = socket.getOutputStream();
             is = socket.getInputStream();
-            sendGetFetchStorageRequest(os, cmd, groupName, fileName);
+            byte[] request = buildGetFetchStorageRequest(cmd, groupName, fileName);
+            os.write(request);
+            // // -1 jump over header check
             ResponseBody responseBody = Messages.readResponse(is, -1);
-            this.errorNo = responseBody.getErrorNo();
-            if (this.errorNo != 0) {
+            byte errorNo = responseBody.getErrorNo();
+            if (errorNo != 0) {
                 return null;
             }
             byte[] body = responseBody.getBody();
-            if (body.length < Constants.TRACKER_QUERY_STORAGE_FETCH_BODY_LEN) {
+            if (body.length < TRACKER_QUERY_STORAGE_FETCH_BODY_LEN) {
                 throw new IllegalStateException("invalid body.length: " + body.length);
             }
-            if ((body.length - Constants.TRACKER_QUERY_STORAGE_FETCH_BODY_LEN)
-                    % (Constants.FDFS_IPADDR_SIZE - 1) != 0) {
+            if ((body.length - TRACKER_QUERY_STORAGE_FETCH_BODY_LEN) % (FDFS_IPADDR_SIZE - 1) != 0) {
                 throw new IllegalStateException("invalid body.length: " + body.length);
             }
             int serverCount =
-                    1 + (body.length - Constants.TRACKER_QUERY_STORAGE_FETCH_BODY_LEN)
-                            / (Constants.FDFS_IPADDR_SIZE - 1);
-            ReadByteArrayFragment readByteArrayFragment = new ReadByteArrayFragment(body);
-            readByteArrayFragment.skip(Constants.FDFS_GROUP_NAME_MAX_LEN);
+                    1 + (body.length - TRACKER_QUERY_STORAGE_FETCH_BODY_LEN) / (FDFS_IPADDR_SIZE - 1);
+            ReadByteArrayFragment response = new ReadByteArrayFragment(body);
+            response.skip(FDFS_GROUP_NAME_MAX_LEN);
+            Set<StorageConfig> set = new HashSet<StorageConfig>();
             for (int i = 0; i < serverCount; i++) {
-                String addr = readByteArrayFragment.readString(0, Constants.FDFS_IPADDR_SIZE - 1).trim();
-                long port = readByteArrayFragment.readLong();
+                String addr = response.readString(0, FDFS_IPADDR_SIZE - 1).trim();
+                long port = response.readLong();
                 InetSocketAddress inetSocketAddress = new InetSocketAddress(addr, (int) port);
                 StorageConfig storageConfig = new StorageConfig();
                 storageConfig.setInetSocketAddress(inetSocketAddress);
                 set.add(storageConfig);
             }
-        }
-        catch (Exception e) {
-            logger.error("getFetchStorageSet fail");
-            logger.error(e.getMessage(), e);
-        }
-        finally {
+            return set;
+        } catch (Exception e) {
+            String msg = "getFetchStorageSet fail, groupName=[{}], fileName=[{}], socket=[{}]";
+            msg = Strings.format(msg, groupName, socket);
+            throw new FdfsException(msg + e.getMessage(), e);
+        } finally {
             closeSocket(socket, is, os);
         }
-        return set;
-
     }
 
 
     @Override
-    public Set<StorageConfig> getFetchStorageSet(String groupName, String fileName) {
-        byte cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_FETCH_ONE;
-        return getFetchStorageSet(cmd, groupName, fileName);
-    }
-
-
-    @Override
-    public GroupStat[] listGroups() {
+    public GroupStat[] listGroups() throws FdfsException {
         Socket socket = getSocket();
-        byte[] header = Messages.createHeader(0L, Constants.TRACKER_PROTO_CMD_SERVER_LIST_GROUP, (byte) 0);
+        byte[] header = Messages.createHeader(0L, TRACKER_PROTO_CMD_SERVER_LIST_GROUP);
         InputStream is = null;
         OutputStream os = null;
         GroupStat[] groupStatArr = null;
@@ -314,8 +301,8 @@ public class SimpleTrackerClient implements TrackerClient {
             is = socket.getInputStream();
             os.write(header);
             ResponseBody responseBody = Messages.readResponse(is, -1);
-            this.errorNo = responseBody.getErrorNo();
-            if (this.errorNo != 0) {
+            byte errorNo = responseBody.getErrorNo();
+            if (errorNo != 0) {
                 return null;
             }
             byte[] body = responseBody.getBody();
@@ -325,61 +312,60 @@ public class SimpleTrackerClient implements TrackerClient {
             }
             groupStatArr =
                     Messages.decode(body, GroupStat.class, GroupStat.getFieldsTotalSize(),
-                        fdfsClientConfigurable.getCharset());
-        }
-        catch (Exception e) {
-            logger.error("listGroups fail");
-            logger.error(e.getMessage(), e);
-        }
-        finally {
+                        fdfsClientConfig.getCharset());
+            return groupStatArr;
+        } catch (Exception e) {
+            String msg = "listGroups fail, groupName=[{}], fileName=[{}] socket=[{}]";
+            msg = Strings.format(msg, socket);
+            throw new FdfsException(msg + e.getMessage(), e);
+        } finally {
             closeSocket(socket, is, os);
         }
-        return groupStatArr;
     }
 
 
-    private StorageStat[] listStorages(Socket socket, String groupName, String storageServerAddr) {
+    private StorageStat[] listStorages(Socket socket, String groupName, String storageServerAddr)
+            throws FdfsException {
         if (Strings.isBlank(groupName)) {
             throw new IllegalArgumentException("groupName is blank");
         }
         InputStream is = null;
         OutputStream os = null;
-        StorageStat[] storageStatArr = null;
-        byte cmd = Constants.TRACKER_PROTO_CMD_SERVER_LIST_STORAGE;
-        byte errorNo = 0;
+        byte cmd = TRACKER_PROTO_CMD_SERVER_LIST_STORAGE;
+
         byte[] storageServerAddrByteArr = null;
         int storageServerAddrByteArrLen = 0;
         try {
             os = socket.getOutputStream();
             is = socket.getInputStream();
-            byte[] groupNameByteArr = groupName.getBytes(fdfsClientConfigurable.getCharset());
-            if (!Strings.isBlank(storageServerAddr)) {
-                storageServerAddrByteArr = storageServerAddr.getBytes(fdfsClientConfigurable.getCharset());
-                if (storageServerAddrByteArr.length < Constants.FDFS_IPADDR_SIZE) {
+            byte[] groupNameByteArr = groupName.getBytes(fdfsClientConfig.getCharset());
+            if (Strings.isNotBlank(storageServerAddr)) {
+                storageServerAddrByteArr = storageServerAddr.getBytes(fdfsClientConfig.getCharset());
+                if (storageServerAddrByteArr.length < FDFS_IPADDR_SIZE) {
                     storageServerAddrByteArrLen = storageServerAddrByteArr.length;
                 }
                 else {
-                    storageServerAddrByteArrLen = Constants.FDFS_IPADDR_SIZE - 1;
+                    storageServerAddrByteArrLen = FDFS_IPADDR_SIZE - 1;
                 }
             }
-            int bodyLength = Constants.FDFS_GROUP_NAME_MAX_LEN + storageServerAddrByteArrLen;
+            int bodyLength = FDFS_GROUP_NAME_MAX_LEN + storageServerAddrByteArrLen;
             int totalLength = 10 + bodyLength;
             WriteByteArrayFragment request = new WriteByteArrayFragment(totalLength);
             {
                 request.writeLong(bodyLength);
                 request.writeByte(cmd);
-                request.writeByte(errorNo);
+                request.writeByte((byte) 0);
             }
             {
-                request.writeSubBytes(groupNameByteArr, Constants.FDFS_GROUP_NAME_MAX_LEN);
+                request.writeLimitedBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
                 if (storageServerAddrByteArr != null) {
-                    request.writeSubBytes(storageServerAddrByteArr, storageServerAddrByteArrLen);
+                    request.writeLimitedBytes(storageServerAddrByteArr, storageServerAddrByteArrLen);
                 }
             }
             os.write(request.getData());
             ResponseBody responseBody = Messages.readResponse(is, -1);
-            this.errorNo = responseBody.getErrorNo();
-            if (this.errorNo != 0) {
+            byte errorNo = responseBody.getErrorNo();
+            if (errorNo != 0) {
                 return null;
             }
             byte[] body = responseBody.getBody();
@@ -387,23 +373,22 @@ public class SimpleTrackerClient implements TrackerClient {
             if (body.length % fieldTotal != 0) {
                 throw new IllegalStateException("invalid body.length");
             }
-            storageStatArr =
+            StorageStat[] storageStatArr =
                     Messages.decode(body, StorageStat.class, StorageStat.getFieldsTotalSize(),
-                        fdfsClientConfigurable.getCharset());
-        }
-        catch (Exception e) {
-            logger.error("listStorages fail");
-            logger.error(e.getMessage(), e);
-        }
-        finally {
+                        fdfsClientConfig.getCharset());
+            return storageStatArr;
+        } catch (Exception e) {
+            String msg = "listStorages fail, groupName=[{}], storageServerAddr=[{}] socket=[{}]";
+            msg = Strings.format(msg, groupName, storageServerAddr, socket);
+            throw new FdfsException(msg + e.getMessage(), e);
+        } finally {
             closeSocket(socket, is, os);
         }
-        return storageStatArr;
     }
 
 
     @Override
-    public StorageStat[] listStorages(String groupName, String storageServerAddr) {
+    public StorageStat[] listStorages(String groupName, String storageServerAddr) throws FdfsException {
         if (Strings.isBlank(groupName)) {
             throw new IllegalArgumentException("groupName is blank");
         }
@@ -413,8 +398,8 @@ public class SimpleTrackerClient implements TrackerClient {
 
 
     @Override
-    public StorageConfig getUpdateStorage(String groupName, String fileName) {
-        byte cmd = Constants.TRACKER_PROTO_CMD_SERVICE_QUERY_UPDATE;
+    public StorageConfig getUpdateStorage(String groupName, String fileName) throws FdfsException {
+        byte cmd = TRACKER_PROTO_CMD_SERVICE_QUERY_UPDATE;
         Set<StorageConfig> set = getFetchStorageSet(cmd, groupName, fileName);
         if (set != null && set.size() > 0) {
             Iterator<StorageConfig> ite = set.iterator();
@@ -439,7 +424,8 @@ public class SimpleTrackerClient implements TrackerClient {
 
 
     @Override
-    public boolean deleteStorage(TrackerGroup trackerGroup, String groupName, String storageServerAddr) {
+    public boolean deleteStorage(TrackerGroup trackerGroup, String groupName, String storageServerAddr)
+            throws FdfsException {
         checkAddrNotBlank(storageServerAddr);
         checkGroupNameNotBlank(groupName);
         Set<Socket> set = trackerGroup.getGroupSocket();
@@ -448,10 +434,11 @@ public class SimpleTrackerClient implements TrackerClient {
             return false;
         }
         int notFoundCount = 0;
+        byte errorNo = 0;
         for (Socket socket : set) {
             StorageStat[] storageStatArr = listStorages(socket, groupName, storageServerAddr);
             if (storageStatArr == null) {
-                if (this.errorNo == Constants.ERR_NO_ENOENT) {
+                if (errorNo == ERR_NO_ENOENT) {
                     notFoundCount++;
                 }
                 else {
@@ -461,9 +448,9 @@ public class SimpleTrackerClient implements TrackerClient {
             else if (storageStatArr.length == 0) {
                 notFoundCount++;
             }
-            else if (storageStatArr[0].getStatus() == Constants.FDFS_STORAGE_STATUS_ONLINE
-                    || storageStatArr[0].getStatus() == Constants.FDFS_STORAGE_STATUS_ACTIVE) {
-                this.errorNo = Constants.ERR_NO_EBUSY;
+            else if (storageStatArr[0].getStatus() == FDFS_STORAGE_STATUS_ONLINE
+                    || storageStatArr[0].getStatus() == FDFS_STORAGE_STATUS_ACTIVE) {
+                errorNo = ERR_NO_EBUSY;
                 return false;
             }
             else {
@@ -471,24 +458,23 @@ public class SimpleTrackerClient implements TrackerClient {
             }
         }
         if (notFoundCount == set.size()) {
-            this.errorNo = Constants.ERR_NO_ENOENT;
+            errorNo = ERR_NO_ENOENT;
             return false;
         }
         notFoundCount = 0;
         for (Socket socket : set) {
             try {
                 if (!this.deleteStorage(socket, groupName, storageServerAddr)) {
-                    if (this.errorNo != 0) {
-                        if (this.errorNo == Constants.ERR_NO_ENOENT) {
+                    if (errorNo != 0) {
+                        if (errorNo == ERR_NO_ENOENT) {
                             notFoundCount++;
                         }
-                        else if (this.errorNo != Constants.ERR_NO_EALREADY) {
+                        else if (errorNo != ERR_NO_EALREADY) {
                             return false;
                         }
                     }
                 }
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 logger.error(e.getMessage(), e);
             }
         }
@@ -497,13 +483,14 @@ public class SimpleTrackerClient implements TrackerClient {
 
 
     @Override
-    public boolean deleteStorage(String groupName, String storageServerAddr) {
+    public boolean deleteStorage(String groupName, String storageServerAddr) throws FdfsException {
         Socket socket = getSocket();
         return deleteStorage(socket, groupName, storageServerAddr);
     }
 
 
-    private boolean deleteStorage(Socket socket, String groupName, String storageServerAddr) {
+    private boolean deleteStorage(Socket socket, String groupName, String storageServerAddr)
+            throws FdfsException {
         if (Strings.isBlank(groupName)) {
             throw new IllegalArgumentException("groupName is blank");
         }
@@ -512,49 +499,57 @@ public class SimpleTrackerClient implements TrackerClient {
         }
         InputStream is = null;
         OutputStream os = null;
-        byte errorNo = 0;
-        byte cmd = Constants.TRACKER_PROTO_CMD_SERVER_DELETE_STORAGE;
+        byte cmd = TRACKER_PROTO_CMD_SERVER_DELETE_STORAGE;
         try {
             os = socket.getOutputStream();
             is = socket.getInputStream();
-            byte[] groupNameByteArr = groupName.getBytes(fdfsClientConfigurable.getCharset());
-            byte[] storageServerAddrByteArr = storageServerAddr.getBytes(fdfsClientConfigurable.getCharset());
+            byte[] groupNameByteArr = groupName.getBytes(fdfsClientConfig.getCharset());
+            byte[] storageServerAddrByteArr = storageServerAddr.getBytes(fdfsClientConfig.getCharset());
             int storageServerAddrByteArrLen = 0;
-            if (storageServerAddrByteArr.length < Constants.FDFS_IPADDR_SIZE) {
+            if (storageServerAddrByteArr.length < FDFS_IPADDR_SIZE) {
                 storageServerAddrByteArrLen = storageServerAddrByteArr.length;
             }
             else {
-                storageServerAddrByteArrLen = Constants.FDFS_IPADDR_SIZE - 1;
+                storageServerAddrByteArrLen = FDFS_IPADDR_SIZE - 1;
             }
-            int bodyLength = Constants.FDFS_GROUP_NAME_MAX_LEN + storageServerAddrByteArrLen;
+            int bodyLength = FDFS_GROUP_NAME_MAX_LEN + storageServerAddrByteArrLen;
             int totalLength = 10 + bodyLength;
             WriteByteArrayFragment request = new WriteByteArrayFragment(totalLength);
             {
                 request.writeLong(bodyLength);
                 request.writeByte(cmd);
-                request.writeByte(errorNo);
+                request.writeByte((byte) 0);
             }
             {
-                request.writeSubBytes(groupNameByteArr, Constants.FDFS_GROUP_NAME_MAX_LEN);
-                request.writeSubBytes(storageServerAddrByteArr, storageServerAddrByteArrLen);
+                request.writeLimitedBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
+                request.writeLimitedBytes(storageServerAddrByteArr, storageServerAddrByteArrLen);
             }
             os.write(request.getData());
             ResponseBody responseBody = Messages.readResponse(is, -1);
-            this.errorNo = responseBody.getErrorNo();
-            if (this.errorNo != 0) {
+            byte errorNo = responseBody.getErrorNo();
+            if (errorNo != 0) {
                 return false;
             }
             byte[] body = responseBody.getBody();
             assert body.length > 0;
             return true;
-        }
-        catch (Exception e) {
-            logger.error("deleteStorage fail");
-            logger.error(e.getMessage(), e);
-        }
-        finally {
+        } catch (Exception e) {
+            String msg = "deleteStorage fail, groupName=[{}], storageServerAddr=[{}] socket=[{}]";
+            msg = Strings.format(msg, groupName, storageServerAddr, socket);
+            throw new FdfsException(msg + e.getMessage(), e);
+        } finally {
             closeSocket(socket, is, os);
         }
-        return false;
+    }
+
+
+    @Override
+    public Set<StorageConfig> getFetchStorageSet(String groupName, String fileName) throws FdfsException {
+        byte cmd = TRACKER_PROTO_CMD_SERVICE_QUERY_UPDATE;
+        Set<StorageConfig> set = getFetchStorageSet(cmd, groupName, fileName);
+        if (set != null && set.size() > 0) {
+            return set;
+        }
+        return null;
     }
 }

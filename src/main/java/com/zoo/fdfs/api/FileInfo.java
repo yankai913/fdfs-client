@@ -4,6 +4,7 @@ import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
+
 /**
  * 
  * @author yankai913@gmail.com
@@ -16,7 +17,7 @@ public class FileInfo {
     protected int crc32;
 
 
-    public FileInfo(long fileSize, int createTimestamp, int crc32, String sourceIpAddr) {
+    public FileInfo(long fileSize, long createTimestamp, int crc32, String sourceIpAddr) {
         this.fileSize = fileSize;
         this.createTimestamp = new Timestamp(createTimestamp * 1000L);
         this.crc32 = crc32;

@@ -83,6 +83,7 @@ public abstract class AbstractClient {
     }
 
 
+    // TODO connection maybe shared with upload
     public int setMetadata(String groupName, String remoteFileName, Map<String, String> meta, byte opFlag) throws FdfsException {
         checkBefore(groupName, remoteFileName);
         byte[] sizeBytes = new byte[Constants.FDFS_PROTO_PKG_LEN_SIZE];
@@ -150,5 +151,39 @@ public abstract class AbstractClient {
             con.close();
         }
         return responseBody.getErrorNo();
+    }
+
+
+    protected byte[] buildSimpleRequest(byte cmd, String groupName, String remoteFileName) throws FdfsException {
+        byte[] groupNameByte = Strings.getBytes(groupName, getFdfsClientConfig().getCharset());
+        groupNameByte = Bytes.wrap(groupNameByte, Constants.FDFS_GROUP_NAME_MAX_LEN);
+        byte[] remoteFileByte = Strings.getBytes(remoteFileName, getFdfsClientConfig().getCharset());
+        long bodyLength = groupNameByte.length + remoteFileByte.length;
+        byte[] header = Messages.createHeader(bodyLength, cmd, (byte) 0);
+        int size = (int) (header.length + bodyLength);
+        WriteByteArrayFragment request = new WriteByteArrayFragment(size);
+        request.writeBytes(header);
+        request.writeBytes(groupNameByte);
+        request.writeBytes(remoteFileByte);
+        return request.getData();
+    }
+
+
+    // TODO connection maybe shared with upload
+    public int deleteFile(String groupName, String remoteFileName) throws FdfsException {
+        byte cmd = Constants.STORAGE_PROTO_CMD_DELETE_FILE;
+        byte[] request = buildSimpleRequest(cmd, groupName, remoteFileName);
+        Connection con = getUpdatableConnection(groupName, remoteFileName);
+        ResponseBody responseBody = null;
+        try {
+            // send
+            con.writeBytes(request);
+            // recv
+            InputStream is = con.getInputStream();
+            responseBody = Messages.readResponse(is, 0);
+            return responseBody.getErrorNo();
+        } catch (Exception e) {
+            throw new FdfsException(e.getMessage(), e);
+        }
     }
 }
