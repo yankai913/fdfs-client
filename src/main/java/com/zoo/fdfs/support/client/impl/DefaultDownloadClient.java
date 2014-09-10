@@ -1,7 +1,5 @@
 package com.zoo.fdfs.support.client.impl;
 
-import static com.zoo.fdfs.api.Constants.FDFS_GROUP_NAME_MAX_LEN;
-import static com.zoo.fdfs.api.Constants.STORAGE_PROTO_CMD_DOWNLOAD_FILE;
 
 import java.io.IOException;
 import java.io.InputStream;

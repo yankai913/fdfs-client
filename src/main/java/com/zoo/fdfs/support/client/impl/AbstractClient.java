@@ -1,7 +1,6 @@
 package com.zoo.fdfs.support.client.impl;
 
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.util.Map;
 

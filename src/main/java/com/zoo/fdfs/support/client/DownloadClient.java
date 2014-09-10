@@ -11,7 +11,7 @@ import com.zoo.fdfs.api.FdfsException;
  * @author yankai913@gmail.com
  * @date 2014-8-21
  */
-public interface DownloadClient {
+public interface DownloadClient extends Constants {
 
     public byte[] downloadFile(String groupName, String remoteFileName) throws FdfsException;
 
