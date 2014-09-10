@@ -11,7 +11,6 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.zoo.fdfs.api.Constants;
 import com.zoo.fdfs.api.FdfsClientConfig;
 import com.zoo.fdfs.api.FdfsException;
 import com.zoo.fdfs.api.GroupStat;
@@ -24,7 +23,6 @@ import com.zoo.fdfs.common.ReadByteArrayFragment;
 import com.zoo.fdfs.common.ResponseBody;
 import com.zoo.fdfs.common.Strings;
 import com.zoo.fdfs.common.WriteByteArrayFragment;
-import com.zoo.fdfs.support.client.impl.AbstractClient;
 
 
 /**
@@ -44,40 +42,18 @@ public class SimpleTrackerClient implements TrackerClient {
 
     public SimpleTrackerClient(FdfsClientConfig fdfsClientConfig) {
         this.fdfsClientConfig = fdfsClientConfig;
-        this.trackerGroup = new TrackerGroup(this.fdfsClientConfig);
+        this.trackerGroup = new TrackerGroup(getFdfsClientConfig());
+    }
+
+
+    private FdfsClientConfig getFdfsClientConfig() {
+        return fdfsClientConfig;
     }
 
 
     @Override
     public Set<String> getTrackerServerAddrSet() {
         return this.trackerGroup.getAvailableTrackerServerAddrSet();
-    }
-
-
-    private byte[] buildGetStoreStorageRequest(byte cmd, String groupName) throws FdfsException {
-        byte[] groupNameByteArr = null;
-        byte errorNo = 0;
-        int bodyLength = 0;
-        if (Strings.isNotBlank(groupName)) {
-            bodyLength = FDFS_GROUP_NAME_MAX_LEN;
-            groupNameByteArr = Strings.getBytes(groupName, fdfsClientConfig.getCharset());
-        }
-        int headerLenght = 10;
-        int totalLength = headerLenght + bodyLength;
-        WriteByteArrayFragment request = new WriteByteArrayFragment(totalLength);
-        // writeHeader
-        {
-            request.writeLong(bodyLength);
-            request.writeByte(cmd);
-            request.writeByte(errorNo);
-        }
-        // writeBody
-        {
-            if (Strings.isNotBlank(groupName)) {
-                request.writeLimitedBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
-            }
-        }
-        return request.getData();
     }
 
 
@@ -115,18 +91,18 @@ public class SimpleTrackerClient implements TrackerClient {
         try {
             os = socket.getOutputStream();
             is = socket.getInputStream();
-            byte cmd = 0;
+            byte cmd = 0, errorNo = 0;
             if (Strings.isBlank(groupName)) {
                 cmd = TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ONE;
             }
             else {
                 cmd = TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITH_GROUP_ONE;
             }
-            byte[] request = buildGetStoreStorageRequest(cmd, groupName);
+            byte[] request = Messages.createRequest(groupName, fdfsClientConfig.getCharset(), cmd, errorNo);
             os.write(request);
             // recv
             ResponseBody responseBody = Messages.readResponse(is, TRACKER_QUERY_STORAGE_STORE_BODY_LEN);
-            byte errorNo = responseBody.getErrorNo();
+            errorNo = responseBody.getErrorNo();
             if (errorNo != 0) {
                 return null;
             }
@@ -158,18 +134,18 @@ public class SimpleTrackerClient implements TrackerClient {
         try {
             os = socket.getOutputStream();
             is = socket.getInputStream();
-            byte cmd = 0;
+            byte cmd = 0, errorNo = 0;
             if (Strings.isBlank(groupName)) {
                 cmd = TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ALL;
             }
             else {
                 cmd = TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITH_GROUP_ALL;
             }
-            byte[] request = buildGetStoreStorageRequest(cmd, groupName);
+            byte[] request = Messages.createRequest(groupName, fdfsClientConfig.getCharset(), cmd, errorNo);
             os.write(request);
             // -1 jump over header check
             ResponseBody responseBody = Messages.readResponse(is, -1);
-            byte errorNo = responseBody.getErrorNo();
+            errorNo = responseBody.getErrorNo();
             if (errorNo != 0) {
                 return null;
             }
@@ -210,28 +186,6 @@ public class SimpleTrackerClient implements TrackerClient {
     }
 
 
-    private byte[] buildGetFetchStorageRequest(byte cmd, String groupName, String fileName) throws Exception {
-        byte[] groupNameByteArr = groupName.getBytes(fdfsClientConfig.getCharset());
-        byte[] fileNameByteArr = fileName.getBytes(fdfsClientConfig.getCharset());
-        byte errorNo = 0;
-        int bodyLength = FDFS_GROUP_NAME_MAX_LEN + fileNameByteArr.length;
-        int totalLength = 10 + bodyLength;
-        WriteByteArrayFragment request = new WriteByteArrayFragment(totalLength);
-        // writeHeader
-        {
-            request.writeLong(bodyLength);
-            request.writeByte(cmd);
-            request.writeByte(errorNo);
-        }
-        // writeBody
-        {
-            request.writeLimitedBytes(groupNameByteArr, FDFS_GROUP_NAME_MAX_LEN);
-            request.writeBytes(fileNameByteArr);
-        }
-        return request.getData();
-    }
-
-
     public StorageConfig getFetchStorageOne(String groupName, String fileName) throws FdfsException {
         Set<StorageConfig> set = getFetchStorageSet(groupName, fileName);
         if (set != null && set.size() > 0) {
@@ -247,14 +201,16 @@ public class SimpleTrackerClient implements TrackerClient {
         Socket socket = getSocket();
         InputStream is = null;
         OutputStream os = null;
+        byte errorNo = 0;
         try {
             os = socket.getOutputStream();
             is = socket.getInputStream();
-            byte[] request = buildGetFetchStorageRequest(cmd, groupName, fileName);
+            byte[] request =
+                    Messages.createRequest(groupName, fileName, fdfsClientConfig.getCharset(), cmd, errorNo);
             os.write(request);
             // // -1 jump over header check
             ResponseBody responseBody = Messages.readResponse(is, -1);
-            byte errorNo = responseBody.getErrorNo();
+            errorNo = responseBody.getErrorNo();
             if (errorNo != 0) {
                 return null;
             }

@@ -7,6 +7,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.zoo.fdfs.api.FdfsClientConfig;
+import com.zoo.fdfs.api.FdfsException;
 import com.zoo.fdfs.api.GroupStat;
 import com.zoo.fdfs.api.StorageConfig;
 import com.zoo.fdfs.api.StorageStat;
@@ -27,13 +28,13 @@ public class TrackerClientTest {
     @BeforeClass
     public static void execBefore() {
         String addr = "211.155.225.210:22122,211.155.225.210:22122";
-        FdfsClientConfig fdfsClientConfigurable = new FdfsClientConfig(addr);
-        trackerClient = new SimpleTrackerClient(fdfsClientConfigurable);
+        FdfsClientConfig fdfsClientConfig = new FdfsClientConfig(addr);
+        trackerClient = new SimpleTrackerClient(fdfsClientConfig);
     }
 
 
     @Test
-    public void testGetStoreStorageOne() {
+    public void testGetStoreStorageOne() throws FdfsException {
         StorageConfig storageConfig = trackerClient.getStoreStorageOne(null);
         System.out.println(storageConfig);
         Assert.assertNotNull(storageConfig);
@@ -50,9 +51,9 @@ public class TrackerClientTest {
 
 
     @Test
-    public void testGetFetchStorageSet() {
+    public void testGetFetchStorageSet() throws FdfsException {
         String groupName = "group1";
-        String fileName = "M00/00/00/wKhRgVM4TPSAd9jZAACGpvjJe5c81404_big.h";
+        String fileName = "M00/00/00/05vh0lQP_6OACtH4AACFzpgzGxg15072_big.h";
         Set<StorageConfig> set = trackerClient.getFetchStorageSet(groupName, fileName);
         System.out.println(set);
         Assert.assertNotNull(set);
@@ -60,7 +61,7 @@ public class TrackerClientTest {
 
 
     @Test
-    public void testListGroups() {
+    public void testListGroups() throws FdfsException {
         GroupStat[] groupStatArr = trackerClient.listGroups();
         Assert.assertNotNull(groupStatArr);
         for (GroupStat gs : groupStatArr) {
@@ -70,7 +71,7 @@ public class TrackerClientTest {
 
 
     @Test
-    public void testListStorages() {
+    public void testListStorages() throws FdfsException {
         String groupName = "group1";
         String storageServerAddr = "211.155.225.210:23000";
         StorageStat[] storageStatArr = trackerClient.listStorages(groupName, storageServerAddr);
@@ -80,9 +81,10 @@ public class TrackerClientTest {
         }
     }
 
+
     @Test
     public void testDeleteStorage() {
-        //TODO 暂时先不删除，最后做这个测试。
-        
+        // TODO 暂时先不删除，最后做这个测试。
+
     }
 }
