@@ -1,6 +1,5 @@
 package com.zoo.fdfs.support.client.impl;
 
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -17,7 +16,6 @@ import com.zoo.fdfs.api.FdfsException;
 import com.zoo.fdfs.api.StorageConfig;
 import com.zoo.fdfs.api.TrackerClient;
 import com.zoo.fdfs.common.Asserts;
-import com.zoo.fdfs.common.Circle;
 import com.zoo.fdfs.common.IOs;
 import com.zoo.fdfs.common.Messages;
 import com.zoo.fdfs.common.ResponseBody;
@@ -61,7 +59,8 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
 
 
     @Override
-    public byte[] downloadFile(String groupName, String remoteFileName, long fileOffset, long downloadBytes) throws FdfsException {
+    public byte[] downloadFile(String groupName, String remoteFileName, long fileOffset, long downloadBytes)
+            throws FdfsException {
         // check
         checkBeforeDownload(groupName, remoteFileName);
 
@@ -94,7 +93,8 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
 
 
     @Override
-    public int downloadFile(String groupName, String remoteFileName, String localFileName) throws FdfsException {
+    public int downloadFile(String groupName, String remoteFileName, String localFileName)
+            throws FdfsException {
         byte[] srcData = downloadFile(groupName, remoteFileName);
         IOs.writeToLocalFile(srcData, localFileName);
         return 0;
@@ -102,7 +102,8 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
 
 
     @Override
-    public int downloadFile(String groupName, String remoteFileName, String localFileName, long fileOffset, long downloadBytes) throws FdfsException {
+    public int downloadFile(String groupName, String remoteFileName, String localFileName, long fileOffset,
+            long downloadBytes) throws FdfsException {
         byte[] srcData = downloadFile(groupName, remoteFileName, fileOffset, downloadBytes);
         IOs.writeToLocalFile(srcData, localFileName);
         return 0;
@@ -110,14 +111,16 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
 
 
     @Override
-    public int downloadFile(String groupName, String remoteFileName, DownloadCallback callback) throws FdfsException {
+    public int downloadFile(String groupName, String remoteFileName, DownloadCallback callback)
+            throws FdfsException {
         int result = downloadFile(groupName, remoteFileName, callback, 0, 0);
         return result;
     }
 
 
     @Override
-    public int downloadFile(String groupName, String remoteFileName, DownloadCallback callback, long fileOffset, long downloadBytes) throws FdfsException {
+    public int downloadFile(String groupName, String remoteFileName, DownloadCallback callback,
+            long fileOffset, long downloadBytes) throws FdfsException {
         // check
         checkBeforeDownload(groupName, remoteFileName);
 
@@ -186,29 +189,27 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
 
             logger.debug("start getReadableConnectionPool...");
 
-            Set<StorageConfig> storageConfigSet = getTrackerClient().getFetchStorageSet(groupName, remoteFileName);
+            Set<StorageConfig> storageConfigSet =
+                    getTrackerClient().getFetchStorageSet(groupName, remoteFileName);
 
             Asserts.assertCollectionIsBlank(storageConfigSet, "storageConfigSet is empty");
 
-            Circle<StorageConfig> addressCircle = new Circle<StorageConfig>(storageConfigSet);
+            int perSize = getFdfsClientConfig().getFetchSizePerAddr();
+            int elementSize = perSize * storageConfigSet.size();
+            final SimpleConnectionPool connectionPool = new SimpleConnectionPool(elementSize, 3);
 
-            final SimpleConnectionPool connectionPool = new SimpleConnectionPool(getFdfsClientConfig().getFetchPoolSize());
-
-            for (int i = 0; i <= connectionPool.getElementLength(); i++) {
-                StorageConfig storageConfig = addressCircle.readNext();
+            for (StorageConfig storageConfig : storageConfigSet) {
                 InetSocketAddress inetSocketAddress = storageConfig.getInetSocketAddress();
                 byte storePathIndex = storageConfig.getStorePathIndex();
-                try {
-                    Connection con = super.newConnection(inetSocketAddress);
-                    con.setStorePathIndex(storePathIndex);
-                    connectionPool.put(con);
-                } catch (Exception e) {// 跳过异常，后面检查。
-                    logger.error("newConnection fail, inetSocketAddress=[{}]", inetSocketAddress, e);
+                for (int i = 0; i < perSize; i++) {
+                    try {
+                        Connection con = super.newConnection(inetSocketAddress);
+                        con.setStorePathIndex(storePathIndex);
+                        connectionPool.put(con);
+                    } catch (Exception e) {// 跳过异常，后面检查。
+                        logger.error("newConnection fail, inetSocketAddress=[{}]", inetSocketAddress, e);
+                    }
                 }
-            }
-
-            if (!connectionPool.isFull()) {
-                throw new FdfsException("init fetchConnectionPool fail...");
             }
 
             setReadableConnectionPool(connectionPool);
@@ -218,7 +219,8 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
     }
 
 
-    private void sendDownloadRequest(OutputStream os, String groupName, String remoteFileName, long fileOffset, long downloadBytes) throws IOException, FdfsException {
+    private void sendDownloadRequest(OutputStream os, String groupName, String remoteFileName,
+            long fileOffset, long downloadBytes) throws IOException, FdfsException {
 
         byte[] groupNameByteArr = Strings.getBytes(groupName, getFdfsClientConfig().getCharset());
         byte[] remoteFileNameByteArr = Strings.getBytes(remoteFileName, getFdfsClientConfig().getCharset());
@@ -230,7 +232,9 @@ public class DefaultDownloadClient extends AbstractClient implements DownloadCli
         int groupNameByteArrLength = FDFS_GROUP_NAME_MAX_LEN;
         int remoteFileNameByteArrLength = remoteFileNameByteArr.length;
 
-        int bodyLength = fileOffsetByteArrLength + downloadBytesByteArrLength + groupNameByteArrLength + remoteFileNameByteArrLength;
+        int bodyLength =
+                fileOffsetByteArrLength + downloadBytesByteArrLength + groupNameByteArrLength
+                        + remoteFileNameByteArrLength;
 
         int requestTotalLength = headerLength + bodyLength;
         WriteByteArrayFragment request = new WriteByteArrayFragment(requestTotalLength);

@@ -1,63 +1,100 @@
 package com.zoo.fdfs.common;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 
 /**
+ * Circle Queue
  * 
  * @author yankai913@gmail.com
  * @date 2014-6-4
  */
-public final class Circle<E> {
+public class Circle<E> {
 
-    private final List<E> data;
+    private final List<ArrayBlockingQueue<E>> data;
 
-    private AtomicInteger readSeq = new AtomicInteger(0);
+    private EffectiveInteger readSeq = new EffectiveInteger(0);
 
-    private AtomicInteger writeSeq = new AtomicInteger(0);
+    private EffectiveInteger writeSeq = new EffectiveInteger(0);
 
+    private int elementSize;
 
-    public Circle(Collection<E> collection) {
-        this.data = new ArrayList<E>(collection);
-    }
+    private int queueCapacity;
 
-
-    public Circle(E[] data) {
-        this.data = Arrays.asList(data);
-    }
+    private int circleSize;
 
 
-    public E readNext() {
-        int idx = readSeq.incrementAndGet() % getCapacity();
-        if (idx < 0) {
-            idx = Math.abs(idx);
+    public Circle(int elementSize, int queueCapacity) {
+        if (elementSize < 0 || queueCapacity < 0) {
+            throw new IllegalArgumentException("invalid number");
         }
-        E e = data.get(idx);
+        if (elementSize < queueCapacity) {
+            throw new IllegalArgumentException("invalid elementLength < queueCapacity");
+        }
+        this.elementSize = elementSize;
+        this.queueCapacity = queueCapacity;
+        if (this.elementSize % this.queueCapacity == 0) {
+            this.circleSize = this.elementSize / this.queueCapacity;
+        }
+        else {
+            this.circleSize = this.elementSize / this.queueCapacity + 1;
+        }
+
+        this.data = new ArrayList<ArrayBlockingQueue<E>>(getCircleSize());
+        for (int i = 0; i < getCircleSize(); i++) {
+            this.data.add(new ArrayBlockingQueue<E>(getQueueCapacity()));
+        }
+    }
+
+
+    public int getCircleSize() {
+        return circleSize;
+    }
+
+
+    public int getElementSize() {
+        return elementSize;
+    }
+
+
+    public int getQueueCapacity() {
+        return queueCapacity;
+    }
+
+
+    public E get() {
+        E e = null;
+        for (;;) {
+            int idx = readSeq.incrementAndGet() % getCircleSize();
+            ArrayBlockingQueue<E> queue = data.get(idx);
+            try {
+                if (queue.peek() != null) {
+                    e = queue.poll(5, TimeUnit.MILLISECONDS);
+                    if (e != null) {
+                        break;
+                    }
+                }
+            } catch (Exception ex) {
+            }
+        }
         return e;
     }
 
 
-    public E writeNext() {
-        int idx = writeSeq.incrementAndGet() % getCapacity();
-        if (idx < 0) {
-            idx = Math.abs(idx);
+    public void put(E e) {
+        for (;;) {
+            int idx = writeSeq.incrementAndGet() % getCircleSize();
+            ArrayBlockingQueue<E> queue = data.get(idx);
+            try {
+                if (queue.offer(e)) {
+                    break;
+                }
+            } catch (Exception ex) {
+            }
         }
-        E e = data.get(idx);
-        return e;
-    }
-
-
-    public List<E> getData() {
-        return data;
-    }
-
-
-    public int getCapacity() {
-        return data.size();
     }
 
 }

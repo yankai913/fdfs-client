@@ -83,14 +83,16 @@ public abstract class AbstractClient {
 
 
     // TODO connection maybe shared with upload
-    public int setMetadata(String groupName, String remoteFileName, Map<String, String> meta, byte opFlag) throws FdfsException {
+    public int setMetadata(String groupName, String remoteFileName, Map<String, String> meta, byte opFlag)
+            throws FdfsException {
         checkBefore(groupName, remoteFileName);
-        byte[] sizeBytes = new byte[Constants.FDFS_PROTO_PKG_LEN_SIZE];
+        byte[] sizeBytes = new byte[2 * Constants.FDFS_PROTO_PKG_LEN_SIZE];
         // fileNameLength
         byte[] remoteFileNameByteArr = Strings.getBytes(remoteFileName, getFdfsClientConfig().getCharset());
         byte[] remoteFileNameByteArrLengthByteArr = new byte[8];
         Bytes.long2bytes(remoteFileNameByteArr.length, remoteFileNameByteArrLengthByteArr);
-        System.arraycopy(remoteFileNameByteArrLengthByteArr, 0, sizeBytes, 0, remoteFileNameByteArrLengthByteArr.length);
+        System.arraycopy(remoteFileNameByteArrLengthByteArr, 0, sizeBytes, 0,
+            remoteFileNameByteArrLengthByteArr.length);
         // metaData
         byte[] metaDataByteArr = new byte[0];
         if (meta != null && meta.size() > 0) {
@@ -116,10 +118,13 @@ public abstract class AbstractClient {
 
         byte cmd = Constants.STORAGE_PROTO_CMD_SET_METADATA;
         // +1 ==> opFlag , one byte
-        long bodyLength = 2 * Constants.FDFS_PROTO_PKG_LEN_SIZE + 1 + groupNameByteArr.length + remoteFileNameByteArr.length + metaDataByteArr.length;
+        long bodyLength =
+                sizeBytes.length + 1 + groupNameByteArr.length + remoteFileNameByteArr.length
+                        + metaDataByteArr.length;
 
         byte[] header = Messages.createHeader(bodyLength, cmd, (byte) 0);
-        WriteByteArrayFragment headerBodyData = new WriteByteArrayFragment((int) bodyLength);
+        int wholeLength = (int) (bodyLength + header.length);
+        WriteByteArrayFragment headerBodyData = new WriteByteArrayFragment(wholeLength);
         // fill header
         headerBodyData.writeBytes(header);
         // fill sizeBytes
@@ -153,7 +158,8 @@ public abstract class AbstractClient {
     }
 
 
-    protected byte[] buildSimpleRequest(byte cmd, String groupName, String remoteFileName) throws FdfsException {
+    protected byte[] buildSimpleRequest(byte cmd, String groupName, String remoteFileName)
+            throws FdfsException {
         byte[] groupNameByte = Strings.getBytes(groupName, getFdfsClientConfig().getCharset());
         groupNameByte = Bytes.wrap(groupNameByte, Constants.FDFS_GROUP_NAME_MAX_LEN);
         byte[] remoteFileByte = Strings.getBytes(remoteFileName, getFdfsClientConfig().getCharset());

@@ -23,7 +23,6 @@ import com.zoo.fdfs.api.TrackerClient;
 import com.zoo.fdfs.api.UploadCallback;
 import com.zoo.fdfs.common.Asserts;
 import com.zoo.fdfs.common.Bytes;
-import com.zoo.fdfs.common.Circle;
 import com.zoo.fdfs.common.IOs;
 import com.zoo.fdfs.common.Messages;
 import com.zoo.fdfs.common.ReadByteArrayFragment;
@@ -101,6 +100,14 @@ public class DefaultUploadClient extends AbstractClient implements UploadClient 
     private String[] doUploadFile(byte cmd, String groupName, String masterFileName, String prefixName,
             String fileExtName, long fileSize, UploadCallback callback, Map<String, String> meta)
             throws FdfsException {
+        /**
+         * protocol of save:
+         * 
+         * |--10bytes (header)--|
+         * |--1bytes(storePathIndex)-8bytes(fileSizeBytes)--|
+         * |--6bytes(extNameLength)--|
+         * |--fileData--|
+         */
         byte[] fileExtNameByteArr = Strings.getBytes(fileExtName, getFdfsClientConfig().getCharset());
         fileExtNameByteArr = Bytes.wrap(fileExtNameByteArr, FDFS_FILE_EXT_NAME_MAX_LEN);
         boolean uploadSlave =
@@ -115,6 +122,7 @@ public class DefaultUploadClient extends AbstractClient implements UploadClient 
         // save: fileExtName
         if (uploadSlave) {// update
             masterFileNameByteArr = Strings.getBytes(masterFileName, getFdfsClientConfig().getCharset());
+            //
             con = getUpdatableConnection(groupName, masterFileName);
             sizeBytes = new byte[2 * FDFS_PROTO_PKG_LEN_SIZE];
             bodyLength =
@@ -173,7 +181,7 @@ public class DefaultUploadClient extends AbstractClient implements UploadClient 
             }
             // receive
             is = con.getInputStream();
-            responseBody = Messages.readResponse(is, TRACKER_QUERY_STORAGE_STORE_BODY_LEN);
+            responseBody = Messages.readResponse(is, -1);
         } catch (Exception e) {
             throw new FdfsException(e.getMessage(), e);
         } finally {
@@ -189,9 +197,9 @@ public class DefaultUploadClient extends AbstractClient implements UploadClient 
         }
         // read
         ReadByteArrayFragment response = new ReadByteArrayFragment(responseBody.getBody());
-        String newGroupName = response.readString(0, FDFS_GROUP_NAME_MAX_LEN);
+        String newGroupName = response.readString(0, FDFS_GROUP_NAME_MAX_LEN).trim();
         String newRemoteFileName =
-                response.readString(0, responseBody.getBody().length - FDFS_GROUP_NAME_MAX_LEN);
+                response.readString(0, responseBody.getBody().length - FDFS_GROUP_NAME_MAX_LEN).trim();
         String[] result = new String[2];
         result[0] = newGroupName;
         result[1] = newRemoteFileName;
@@ -226,24 +234,22 @@ public class DefaultUploadClient extends AbstractClient implements UploadClient 
 
             Asserts.assertCollectionIsBlank(writableStorageConfigSet, "writableStorageConfigSet is empty");
 
-            Circle<StorageConfig> addressCircle = new Circle<StorageConfig>(writableStorageConfigSet);
-            final SimpleConnectionPool connectionPool =
-                    new SimpleConnectionPool(getFdfsClientConfig().getFetchPoolSize());
-            for (int i = 0; i <= connectionPool.getElementLength(); i++) {
-                StorageConfig storageConfig = addressCircle.readNext();
+            int perSize = getFdfsClientConfig().getStorageSizePerAddr();
+            int elementSize = perSize * writableStorageConfigSet.size();
+            final SimpleConnectionPool connectionPool = new SimpleConnectionPool(elementSize, 3);
+            for (StorageConfig storageConfig : writableStorageConfigSet) {
                 InetSocketAddress inetSocketAddress = storageConfig.getInetSocketAddress();
                 byte storePathIndex = storageConfig.getStorePathIndex();
-                try {
-                    Connection con = super.newConnection(inetSocketAddress);
-                    con.setStorePathIndex(storePathIndex);
-                    connectionPool.put(con);
-                } catch (Exception e) {
-                    throw new FdfsException("newConnection fail, inetSocketAddress=[" + inetSocketAddress
-                            + "]" + e.getMessage(), e);
+                for (int i = 0; i < perSize; i++) {
+                    try {
+                        Connection con = super.newConnection(inetSocketAddress);
+                        con.setStorePathIndex(storePathIndex);
+                        connectionPool.put(con);
+                    } catch (Exception e) {
+                        throw new FdfsException("newConnection fail, inetSocketAddress=[" + inetSocketAddress
+                                + "]" + e.getMessage(), e);
+                    }
                 }
-            }
-            if (!connectionPool.isFull()) {
-                throw new FdfsException("init ConnectionPool fail...");
             }
             setWritableConnectionPool(connectionPool);
         }
@@ -381,8 +387,8 @@ public class DefaultUploadClient extends AbstractClient implements UploadClient 
     @Override
     public String[] uploadAppenderFile(byte[] fileBuff, String fileExtName, Map<String, String> meta)
             throws FdfsException {
-        String group_name = null;
-        return this.uploadAppenderFile(group_name, fileBuff, 0, fileBuff.length, fileExtName, meta);
+        String groupName = null;
+        return this.uploadAppenderFile(groupName, fileBuff, 0, fileBuff.length, fileExtName, meta);
     }
 
 
@@ -464,6 +470,7 @@ public class DefaultUploadClient extends AbstractClient implements UploadClient 
         ResponseBody responseBody = null;
         int errorNo = 0;
         try {
+            is = con.getInputStream();
             out = con.getOutputStream();
             out.write(request.getData());
             errorNo = callback.send(out);
@@ -477,6 +484,8 @@ public class DefaultUploadClient extends AbstractClient implements UploadClient 
             return 0;
         } catch (Exception e) {
             throw new FdfsException(e.getMessage(), e);
+        } finally {
+            con.close();
         }
     }
 
@@ -548,6 +557,7 @@ public class DefaultUploadClient extends AbstractClient implements UploadClient 
         ResponseBody responseBody = null;
         int errorNo = 0;
         try {
+            is = con.getInputStream();
             out = con.getOutputStream();
             out.write(request.getData());
             errorNo = callback.send(out);
@@ -561,6 +571,8 @@ public class DefaultUploadClient extends AbstractClient implements UploadClient 
             return 0;
         } catch (Exception e) {
             throw new FdfsException(e.getMessage(), e);
+        } finally {
+            con.close();
         }
     }
 

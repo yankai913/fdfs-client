@@ -21,11 +21,11 @@ public class FdfsClientConfig {
 
     private String trackerServerAddr;// 192.168.1.10:22122,192.168.1.11:22122
 
-    private int fetchPoolSize = 1;
+    private int fetchSizePerAddr = 10;
 
-    private int updatePoolSize = 1;
+    private int updateSizePerAddr = 10;
 
-    private int storagePoolSize = 1;
+    private int storageSizePerAddr = 10;
 
 
     public FdfsClientConfig(String trackerServerAddr) {
@@ -33,12 +33,12 @@ public class FdfsClientConfig {
     }
 
 
-    public FdfsClientConfig(String trackerServerAddr, int fetchPoolSize, int updatePoolSize,
-            int storagePoolSize) {
+    public FdfsClientConfig(String trackerServerAddr, int fetchSizePerAddr, int updateSizePerAddr,
+            int storageSizePerAddr) {
         this.trackerServerAddr = trackerServerAddr;
-        this.fetchPoolSize = fetchPoolSize;
-        this.updatePoolSize = updatePoolSize;
-        this.storagePoolSize = storagePoolSize;
+        this.fetchSizePerAddr = fetchSizePerAddr;
+        this.updateSizePerAddr = updateSizePerAddr;
+        this.storageSizePerAddr = storageSizePerAddr;
     }
 
 
@@ -112,33 +112,33 @@ public class FdfsClientConfig {
     }
 
 
-    public int getFetchPoolSize() {
-        return fetchPoolSize;
+    public int getFetchSizePerAddr() {
+        return fetchSizePerAddr;
     }
 
 
-    public void setFetchPoolSize(int fetchPoolSize) {
-        this.fetchPoolSize = fetchPoolSize;
+    public void setFetchSizePerAddr(int fetchSizePerAddr) {
+        this.fetchSizePerAddr = fetchSizePerAddr;
     }
 
 
-    public int getUpdatePoolSize() {
-        return updatePoolSize;
+    public int getUpdateSizePerAddr() {
+        return updateSizePerAddr;
     }
 
 
-    public void setUpdatePoolSize(int updatePoolSize) {
-        this.updatePoolSize = updatePoolSize;
+    public void setUpdateSizePerAddr(int updateSizePerAddr) {
+        this.updateSizePerAddr = updateSizePerAddr;
     }
 
 
-    public int getStoragePoolSize() {
-        return storagePoolSize;
+    public int getStorageSizePerAddr() {
+        return storageSizePerAddr;
     }
 
 
-    public void setStoragePoolSize(int storagePoolSize) {
-        this.storagePoolSize = storagePoolSize;
+    public void setStorageSizePerAddr(int storageSizePerAddr) {
+        this.storageSizePerAddr = storageSizePerAddr;
     }
 
 }
